@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: student-voice
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node scripts/cloud-start.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DB_SSL
+        value: "true"
+      - key: MEDIA_STORAGE
+        value: database
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "4000"
+      - key: DB_NAME
+        value: student_voice
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: INITIAL_STAFF_USERNAME
+        sync: false
+      - key: INITIAL_STAFF_PASSWORD
+        sync: false

@@ -1,3 +1,4 @@
+import { db } from './database.js';
 import multer from 'multer';
 import sharp from 'sharp';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
@@ -29,12 +30,30 @@ export async function saveImage(file) {
         error.status = 400;
         throw error;
     }
-    await mkdir(imageDirectory, { recursive: true });
     const name = randomBytes(16).toString('hex') + '.webp';
-    await writeFile(resolve(imageDirectory, name), buffer, { flag: 'wx' });
+    if (process.env.MEDIA_STORAGE === 'database') {
+        await db.execute('INSERT INTO media_files (name, data) VALUES (?, ?)', [name, buffer]);
+    } else {
+        await mkdir(imageDirectory, { recursive: true });
+        await writeFile(resolve(imageDirectory, name), buffer, { flag: 'wx' });
+    }
     return name;
 }
 
 export async function removeImage(name) {
-    if (name) await unlink(resolve(imageDirectory, name));
+    if (!name) return;
+    if (process.env.MEDIA_STORAGE === 'database') await db.execute('DELETE FROM media_files WHERE name = ?', [name]);
+    else await unlink(resolve(imageDirectory, name));
+}
+
+// Each route checks access before reading an image.
+export async function sendImage(res, name, next) {
+    if (process.env.MEDIA_STORAGE === 'database') {
+        const [rows] = await db.execute('SELECT data FROM media_files WHERE name = ?', [name]);
+        if (!rows.length) return res.status(404).end();
+        return res.type('webp').send(rows[0].data);
+    }
+    res.type('webp').sendFile(resolve(imageDirectory, name), error => {
+        if (error) next(error);
+    });
 }

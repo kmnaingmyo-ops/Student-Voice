@@ -7,5 +7,6 @@ export const db = mysql.createPool({
     user: process.env.DB_USER || 'sv_app',
     password: process.env.DB_PASSWORD,
     charset: 'utf8mb4',
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
     connectionLimit: 5,
 });

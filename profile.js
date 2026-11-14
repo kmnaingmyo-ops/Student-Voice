@@ -1,6 +1,5 @@
-import { resolve } from 'node:path';
 import { db } from './database.js';
-import { uploadImage, saveImage, removeImage, imageDirectory } from './media.js';
+import { uploadImage, saveImage, removeImage, sendImage } from './media.js';
 
 export function registerProfileRoutes(app, requireStudent, limit) {
     app.get('/api/profile', requireStudent, async (req, res) => {
@@ -17,9 +16,7 @@ export function registerProfileRoutes(app, requireStudent, limit) {
         const [students] = await db.execute('SELECT avatar_name FROM students WHERE id = ?', [req.session.studentId]);
         const name = students[0]?.avatar_name;
         if (!/^[a-f0-9]{32}\.webp$/.test(name || '')) return res.status(404).end();
-        res.type('webp').sendFile(resolve(imageDirectory, name), error => {
-            if (error) next(error);
-        });
+        await sendImage(res, name, next);
     });
 
     app.post('/api/profile', requireStudent, limit, uploadImage, async (req, res) => {

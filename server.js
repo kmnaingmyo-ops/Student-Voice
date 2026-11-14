@@ -20,6 +20,7 @@ const categories = ['授業', '学校生活', '設備', 'その他'];
 const dummyHash = await hashPassword(randomBytes(32).toString('hex'));
 
 app.disable('x-powered-by');
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use((req, res, next) => {
     res.set({
         'Content-Security-Policy': "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' blob:",
@@ -36,7 +37,7 @@ app.use(session({
     secret,
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'strict', maxAge: 60 * 60 * 1000 },
+    cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'strict', maxAge: 60 * 60 * 1000 },
 }));
 
 app.use('/api', (req, res, next) => {
@@ -254,7 +255,7 @@ app.use((error, req, res, next) => {
 
 // Bind to this computer for local school demonstrations.
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-    app.listen(Number(process.env.PORT || 3000), '127.0.0.1', () => {
+    app.listen(Number(process.env.PORT || 3000), process.env.HOST || '127.0.0.1', () => {
         console.log(`Student Voice: http://localhost:${process.env.PORT || 3000}`);
     });
 }

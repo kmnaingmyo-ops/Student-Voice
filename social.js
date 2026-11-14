@@ -1,6 +1,5 @@
-import { resolve } from 'node:path';
 import { db } from './database.js';
-import { imageDirectory } from './media.js';
+import { sendImage } from './media.js';
 
 const reactionKinds = ['like', 'love', 'haha', 'wow', 'sad', 'care'];
 
@@ -44,9 +43,7 @@ export function registerSocialRoutes(app, requireStudent, requireStaff, socialLi
             || !/^[a-f0-9]{32}\.webp$/.test(post.image_name || '')) {
             return res.status(404).end();
         }
-        res.type('webp').sendFile(resolve(imageDirectory, post.image_name), error => {
-            if (error) next(error);
-        });
+        await sendImage(res, post.image_name, next);
     });
 
     app.get('/api/suggestions/:id/social', async (req, res) => {
