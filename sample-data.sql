@@ -57,5 +57,5 @@ FROM (
 ) AS sample
 WHERE NOT EXISTS (
     SELECT 1 FROM suggestions AS existing
-    WHERE existing.title = sample.title AND existing.body = sample.body
+    WHERE existing.title COLLATE utf8mb4_unicode_ci = sample.title COLLATE utf8mb4_unicode_ci AND existing.body COLLATE utf8mb4_unicode_ci = sample.body COLLATE utf8mb4_unicode_ci
 );

@@ -2,6 +2,12 @@
 
 A Japanese student blog built with Node.js, Express, MySQL, HTML, CSS, and JavaScript. Students sign up and log in to write articles. Teachers review articles before publication.
 
+## Live website
+
+https://student-voice-p2mf.onrender.com/
+
+Hosted on the free Render web service with a MySQL-compatible TiDB Cloud Starter database and a $0 spending limit. Free hosting may take about a minute to wake after inactivity. Uploaded images are stored in the database on this deployment so they survive restarts. Current in-memory login sessions are cleared when the server restarts. The GitHub copy includes the smaller intro video; the original 8K clip stays local.
+
 ## Put this project on GitHub
 
 Extract `student-voice-github.zip`. Upload the files inside the student-voice-js folder to the root of your GitHub repository. The repository root should contain package.json, server.js, README.md, and the public and scripts folders.
