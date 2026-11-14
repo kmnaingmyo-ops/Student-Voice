@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Student Voice | みんなのスクールブログ</title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/editorial.css">
+    <meta name="description" content="Student Voice — 生徒がつづる、教室の向こうのストーリー。">
+    <script src="/app.js" defer></script>
+    <script src="/navigation.js" defer></script>
+
+    <script src="/cinema.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#journal">記事一覧へスキップ</a>
+<header class="top">
+    <div class="wrap header-row">
+        <a class="brand" href="#board"><span class="brand-mark" aria-hidden="true">S</span> Student Voice<span class="brand-dot">.</span></a>
+        <nav aria-label="メインメニュー">
+            <a href="#board">ブログ</a>
+            <a href="#submit">記事を書く</a>
+            <a href="#staff">先生用</a>
+        </nav>
+        <div class="header-account">
+            <a id="nav-login" href="#account">ログイン</a>
+            <a id="nav-signup" class="button" href="#signup">新規登録 ↗</a>
+            <a id="nav-account" class="button secondary" href="#profile" hidden>マイプロフィール</a>
+        </div>
+    </div>
+</header>
+<main class="wrap">
+    <p id="notice" role="status" hidden></p>
+    <section id="board" hidden>
+        <section class="hero cinematic adventure-hero" aria-labelledby="cinema-title">
+            <video id="cinema-video" autoplay muted loop playsinline preload="metadata" disablepictureinpicture disableremoteplayback aria-hidden="true">
+                <source src="/assets/student-hero-8k.mp4?v=1115" type='video/mp4; codecs="hvc1.1.6.H183.B0"'>
+                <source src="/assets/student-hero.mp4?v=1115" type="video/mp4">
+            </video>
+            <div class="cinema-shade"></div>
+            <div class="cinema-copy">
+                <p class="eyebrow">STUDENT VOICE / SCHOOL STORIES</p>
+                <h1 id="cinema-title" lang="en"><span>YOUR VOICE.</span><br><span>OUR SCHOOL.</span></h1>
+                <p>いつもの毎日を、新しい視点で。<br>私たちの経験が、学校の物語になる。</p>
+                <a class="cinema-link" href="#board" id="explore-journal">みんなの記事へ <span aria-hidden="true">↓</span></a>
+            </div>
+            <div class="cinema-caption">DISCOVER. SHARE. CONNECT.</div>
+        </section>
+        <div class="journal-intro" id="journal" tabindex="-1"><p class="eyebrow">OUR STORIES</p><h2>私たちの、スクールライフ。</h2><p>授業、放課後、新しい挑戦。みんなの経験を読んでみよう。</p></div>
+        <div id="category-filters" class="filters" aria-label="ブログのカテゴリ"></div>
+        <div id="featured-post"></div>
+        <div class="section-heading board-heading"><h2>みんなの記事</h2><span id="post-count"></span></div>
+        <div id="public-posts" class="cards blog-grid" aria-live="polite"></div>
+        <nav id="pagination" class="pagination" aria-label="記事一覧のページ"></nav>
+        <section id="recent-stories" class="recent-stories" aria-labelledby="recent-title" hidden>
+            <div class="recent-heading"><span aria-hidden="true"></span><h2 id="recent-title">RECENT BLOG POSTS</h2><p>新しく公開された記事</p></div>
+            <div id="recent-posts" class="recent-grid"></div>
+        </section>
+    </section>
+    <section id="article" hidden>
+        <a class="back-link" href="#board">← ブログ一覧へ</a>
+        <article id="article-content" class="article-content"></article>
+    </section>
+    <section id="submit" class="form-page" hidden>
+        <div class="writer-hero">
+            <div class="writer-hero-copy"><p class="eyebrow">WRITE YOUR STORY</p><h1>その経験を、<br><span>誰かのきっかけに。</span></h1>
+                <p>授業でひらめいたこと。放課後に夢中になったこと。<br>あなただけの視点で、学校の毎日をつづろう。</p>
+                <a href="#board" class="writer-browse">みんなの記事からヒントを探す ↗</a>
+            </div>
+            <div class="writer-hero-photo"><img src="/thumbnails/notes.jpg" alt="ノートと鉛筆が置かれた、物語を書き始めるための机"><span>小さな発見から、物語は始まる。</span></div>
+        </div>
+        <div id="post-login" class="writer-gate">
+            <div><p class="eyebrow">ここから、あなたも書き手に。</p><h2>最初の一記事を、書いてみよう。</h2><p>生徒アカウントでログインすると、記事の作成を始められます。</p></div>
+            <div class="writer-gate-actions"><a class="button" href="#signup">新規登録して書き始める ↗</a><a href="#account">アカウントをお持ちの方はログイン →</a></div>
+        </div>
+        <div id="writing-workspace" class="writing-workspace" hidden>
+        <form id="suggestion-form" class="panel stack editor">
+            <div class="editor-heading"><div><p class="eyebrow">YOUR DRAFT</p><h2>新しい記事を書く</h2></div><a href="#profile">自分の記事を見る ↗</a></div>
+            <label>カテゴリ<select name="category" required>
+                <option value="">選択してください</option>
+                <option>授業</option><option>学校生活</option><option>設備</option><option>その他</option>
+            </select></label>
+            <fieldset class="cover-picker">
+                <legend>カバー画像</legend>
+                <label class="radio-label"><input type="radio" name="cover_mode" value="icon" checked> 写真・ブログアイコンを使う</label>
+                <label>サムネイル<select name="cover_icon"><option value="outline">話題に合う写真（自動）</option><option value="color">ブログ（カラー）</option></select></label>
+                <label class="radio-label"><input type="radio" name="cover_mode" value="upload"> 自分の画像を使う</label>
+                <label>画像を選ぶ<input id="post-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" disabled></label>
+                <p>JPEG・PNG・WebP、3MBまで。写真やダウンロードしたブログアイコンを選べます。</p>
+                <p><a href="https://www.flaticon.com/free-icons/web-blog" target="_blank" rel="noopener noreferrer">Flaticonでブログアイコンを探す ↗</a></p>
+                <img id="cover-preview" src="/icons/blog-outline.png" alt="選択したカバーのプレビュー">
+            </fieldset>
+            <label>記事のタイトル<input name="title" maxlength="60" placeholder="どんなことを書きますか？" required></label>
+            <label>本文<textarea name="body" rows="14" maxlength="5000" aria-describedby="count" placeholder="あなたのストーリーをここに。" required></textarea></label>
+            <span id="count">0 / 5000</span>
+            <progress id="writing-progress" max="5000" value="0" aria-label="本文の文字数"></progress>
+            <p class="editor-note">記事は先生が確認した後に公開されます。氏名や連絡先などの個人情報は書かないでください。</p>
+            <div class="editor-footer"><p>ユーザー名は公開されません。</p><button>確認を依頼する ↗</button></div>
+        </form>
+        <aside class="writer-sidebar"><p class="eyebrow">FIND YOUR ANGLE</p><h2>何から書こう？</h2><p>話題を選んで、最初の一文を考えてみよう。</p>
+            <div class="writing-prompts">
+                <button type="button" data-category="授業" data-prompt="今日の授業で、いちばん印象に残ったことは…"><span>授業の発見</span>「なるほど！」と思った瞬間 <b aria-hidden="true">↗</b></button>
+                <button type="button" data-category="学校生活" data-prompt="いつもの学校生活で、小さな変化に気づきました。"><span>学校生活</span>何気ない毎日の、小さな変化 <b aria-hidden="true">↗</b></button>
+                <button type="button" data-category="その他" data-prompt="これから学校で挑戦してみたいことがあります。"><span>新しい挑戦</span>これからやってみたいこと <b aria-hidden="true">↗</b></button>
+            </div>
+            <div class="writer-checklist"><h3>公開までの流れ</h3><p>記事を書く → 先生に確認を依頼 → 公開</p><a href="#profile">確認状況はプロフィールで見る →</a></div>
+        </aside>
+        </div>
+        <section id="writer-inspiration" class="writer-inspiration" aria-labelledby="inspiration-heading">
+            <div class="writer-section-heading"><p class="eyebrow">EVERYDAY, A NEW STORY</p><h2 id="inspiration-heading">書きたいことは、きっと身近に。</h2></div>
+            <div class="inspiration-grid">
+                <a href="#board" class="inspiration-card"><img src="/thumbnails/science.jpg" alt="理科の授業を連想させる顕微鏡" loading="lazy"><div><span>学びの発見</span><h3>昨日までの「わからない」が、<br>今日の「わかった」に。</h3><p>授業で考えたことや、自分なりの学び方を。</p></div></a>
+                <a href="#board" class="inspiration-card"><img src="/thumbnails/festival.jpg" alt="色とりどりの旗が飾られたイベント会場" loading="lazy"><div><span>みんなとの時間</span><h3>ひとりでは生まれない、<br>学校のストーリー。</h3><p>行事や部活、友達との思い出を。</p></div></a>
+                <a href="#board" class="inspiration-card"><img src="/thumbnails/library.jpg" alt="本が並ぶ、明かりのともった図書室" loading="lazy"><div><span>自分だけの視点</span><h3>いつもの場所にも、<br>新しい発見がある。</h3><p>好きな場所、おすすめの本、日々の気づきを。</p></div></a>
+            </div>
+        </section>
+    </section>
+    <section id="profile" class="form-page" hidden>
+        <div class="profile-hero"><div><p class="eyebrow">MY PAGE / MY STORY</p><h1>あなたらしさが、<br><span>物語になる。</span></h1><p>ここは、あなたの発見と挑戦が集まる場所。</p><span class="profile-private">マイプロフィール · 自分だけのページ</span></div><img src="/thumbnails/campus.jpg" alt="学校の風景"></div>
+        <div id="profile-login" class="panel"><p>プロフィールを見るには生徒アカウントでログインしてください。</p><a class="button" href="#account">ログイン →</a></div>
+        <div id="profile-content" hidden>
+            <div class="profile-stats" aria-label="自分の記事の集計"><div><strong id="stat-total">0</strong><span>これまでの記事</span></div><div><strong id="stat-published">0</strong><span>公開された声</span></div><div><strong id="stat-pending">0</strong><span>先生の確認待ち</span></div><a href="#submit">次の物語を書く <span>↗</span></a></div>
+            <div class="profile-layout">
+                <aside class="panel profile-summary">
+                    <img id="profile-avatar" class="profile-avatar" src="/icons/blog-outline.png" alt="プロフィール画像">
+                    <h2 id="profile-name"></h2><p id="profile-username"></p><p id="profile-bio" class="body"></p>
+                    <p id="profile-joined"></p><a class="button" href="#submit">記事を書く ↗</a>
+                    <button id="profile-logout" class="secondary">ログアウト</button>
+                </aside>
+                <form id="profile-form" class="panel stack">
+                    <div class="profile-edit-heading"><p class="eyebrow">MAKE IT YOURS</p><h2>あなたのことを、少しだけ。</h2><p>好きなことや、今夢中になっていることを書いてみよう。</p></div>
+                    <label>表示名（40文字まで）<input name="display_name" maxlength="40" autocomplete="nickname"></label>
+                    <label>自己紹介（300文字まで）<textarea name="bio" rows="4" maxlength="300"></textarea></label>
+                    <label>プロフィール画像<input name="image" type="file" accept="image/jpeg,image/png,image/webp"></label>
+                    <p class="comment-help">JPEG・PNG・WebP、3MBまで。画像を選ばずに保存すると現在の画像を使います。</p>
+                    <label class="radio-label"><input name="remove_avatar" type="checkbox" value="1"> 現在のプロフィール画像を削除する</label>
+                    <button>変更を保存</button>
+                </form>
+            </div>
+            <div class="section-heading profile-post-heading"><div><p class="eyebrow">YOUR STORY SO FAR</p><h2>あなたがつづった物語</h2></div><span id="my-post-count"></span></div>
+            <div id="my-posts" class="cards"></div>
+        </div>
+    </section>
+    <section id="account" class="form-page" hidden>
+        <div id="student-session" class="panel account-card" hidden>
+            <p class="eyebrow">MY ACCOUNT</p><h1>おかえりなさい。</h1><p>今日のストーリーを書いてみませんか。</p>
+            <p><a class="button" href="#profile">マイプロフィール →</a> <a class="button secondary" href="#submit">ブログを書く ↗</a></p>
+            <button id="student-logout" class="secondary">ログアウト</button>
+        </div>
+        <div id="student-forms" class="auth-layout">
+            <aside class="auth-sculpture" aria-hidden="true">
+                <svg viewBox="0 0 650 720" fill="none">
+                    <defs>
+                        <linearGradient id="tube" x2="1" y2="1"><stop stop-color="#d3d9e4"/><stop offset=".4" stop-color="white"/><stop offset="1" stop-color="#b7c0d1"/></linearGradient>
+                        <linearGradient id="blue" x2="1" y2="1"><stop stop-color="#779dff"/><stop offset="1" stop-color="#1256e8"/></linearGradient>
+                        <linearGradient id="cyan" x2="0" y2="1"><stop stop-color="#a5efff"/><stop offset="1" stop-color="#e3faff"/></linearGradient>
+                        <filter id="sculpture-shadow" x="-30%" y="-30%" width="170%" height="180%"><feDropShadow dx="12" dy="19" stdDeviation="9" flood-color="#53627b" flood-opacity=".18"/></filter>
+                    </defs>
+                    <g transform="translate(50 40) rotate(-17 275 260)" filter="url(#sculpture-shadow)">
+                        <path d="M-30 150H95Q125 150 125 120V70Q125 40 155 40H360Q390 40 390 70V110Q390 140 420 140H630M125 145V270Q125 300 155 300H430Q460 300 460 330V440Q460 470 430 470H210Q180 470 180 440V390Q180 360 150 360H-30" stroke="url(#tube)" stroke-width="19" stroke-linecap="round"/>
+                        <path d="M25 150H125V260Q125 300 170 300H300V360Q300 390 340 390H460" stroke="url(#cyan)" stroke-width="13" stroke-linecap="round"/>
+                        <path d="M310 40h75" stroke="url(#blue)" stroke-width="46"/>
+                        <path d="M315 20v40M365 20v40" stroke="#3169db" stroke-width="2"/>
+                        <rect x="210" y="175" width="140" height="110" rx="22" fill="url(#blue)"/>
+                        <g fill="#163fc8"><circle cx="240" cy="202" r="5"/><circle cx="278" cy="202" r="5"/><circle cx="316" cy="202" r="5"/><circle cx="240" cy="230" r="5"/><circle cx="278" cy="230" r="5"/><circle cx="316" cy="230" r="5"/><circle cx="240" cy="258" r="5"/><circle cx="278" cy="258" r="5"/><circle cx="316" cy="258" r="5"/></g>
+                        <rect x="420" y="190" width="110" height="85" rx="14" fill="#b6e2ee"/>
+                        <path d="M240 390Q260 320 330 340T460 410" stroke="url(#blue)" stroke-width="22" stroke-linecap="round"/>
+                        <path d="m380 110 28 16-2 33-30 17-28-16 2-33Z" fill="#f3bb62"/><circle cx="379" cy="143" r="10" fill="#da883f"/>
+                        <path d="M50 345h50" stroke="#ee5e67" stroke-width="22" stroke-linecap="round"/>
+                    </g>
+                </svg>
+                <div class="sculpture-caption"><span>IDEAS CONNECT US.</span><p>あなたの発見から、つながる毎日。</p></div>
+            </aside>
+            <div class="auth-content">
+                <nav class="auth-tabs" aria-label="アカウント操作"><a href="#account">ログイン</a><a href="#signup">新規登録</a></nav>
+                <div id="student-login-panel">
+                    <p class="eyebrow">YOUR NEXT CHAPTER</p><h1>おかえりなさい。</h1><p>今日も、あなたらしい一ページを。</p>
+                    <form id="student-login-form" class="stack">
+                        <label>ユーザー名<input name="username" minlength="4" maxlength="32" pattern="[A-Za-z0-9_]{4,32}" autocomplete="username" required></label>
+                        <label>パスワード<span class="password-field"><input id="student-password" name="password" type="password" minlength="4" maxlength="8" autocomplete="current-password" required><button type="button" class="password-toggle" aria-controls="student-password" aria-pressed="false">表示</button></span></label>
+                        <button>ログイン →</button>
+                    </form>
+                    <p><a href="#forgot">パスワードを忘れた方</a></p>
+                </div>
+                <div id="signup-panel" hidden>
+                    <p class="eyebrow">THIS IS YOUR BEGINNING</p><h1>はじめまして。</h1><p>読む人から、物語をつくる人へ。</p>
+                    <form id="signup-form" class="stack">
+                        <label>ユーザー名<input name="username" minlength="4" maxlength="32" pattern="[A-Za-z0-9_]{4,32}" autocomplete="username" aria-describedby="signup-username-help" required><small id="signup-username-help">半角英数字・_で4〜32文字</small></label>
+                        <label>パスワード<span class="password-field"><input id="signup-password" name="password" type="password" minlength="4" maxlength="8" autocomplete="new-password" aria-describedby="signup-password-help" required><button type="button" class="password-toggle" aria-controls="signup-password" aria-pressed="false">表示</button></span><small id="signup-password-help">4〜8文字で設定してください。</small></label>
+                        <button>アカウントを作成 →</button>
+                    </form>
+                </div>
+                <div class="auth-footnote"><span aria-hidden="true">✦</span><p>あなたの小さな発見が、誰かのきっかけに。<br><span>記事は先生の確認後に公開されます。</span></p></div>
+            </div>
+        </div>
+    </section>
+    <section id="forgot" class="form-page" hidden>
+        <div class="recovery-layout">
+            <div class="recovery-content">
+                <a href="#account" class="recovery-back">← ログインへ戻る</a>
+                <p class="eyebrow">ACCOUNT RECOVERY</p>
+                <h1>また、ここから。</h1>
+                <p class="recovery-lead">パスワードを忘れても大丈夫。<br>先生から受け取ったコードで、再設定できます。</p>
+                <form id="reset-form" class="stack">
+                    <label>ユーザー名<input name="username" minlength="4" maxlength="32" autocomplete="username" required></label>
+                    <label>再設定コード<input name="code" minlength="32" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="recovery-code-help" required><small id="recovery-code-help">先生から受け取った32文字のコードを貼り付けてください。</small></label>
+                    <label>新しいパスワード<span class="password-field"><input id="recovery-password" name="password" type="password" minlength="4" maxlength="8" autocomplete="new-password" aria-describedby="recovery-password-help" required><button type="button" class="password-toggle" aria-controls="recovery-password" aria-pressed="false">表示</button></span><small id="recovery-password-help">4〜8文字で設定してください。</small></label>
+                    <button>パスワードを更新 →</button>
+                </form>
+            </div>
+            <aside class="recovery-guide" aria-labelledby="recovery-guide-title">
+                <div class="recovery-key" aria-hidden="true"><svg viewBox="0 0 180 150" fill="none"><rect x="48" y="65" width="84" height="68" rx="18" fill="#0866ff"/><path d="M65 65V46a25 25 0 0 1 50 0v19" stroke="#9bbcf8" stroke-width="15"/><circle cx="90" cy="96" r="8" fill="white"/><path d="M90 102v12" stroke="white" stroke-width="6" stroke-linecap="round"/><circle cx="143" cy="42" r="7" fill="#ffcc70"/><circle cx="31" cy="112" r="5" fill="#a3d9ee"/></svg></div>
+                <p class="eyebrow">BACK TO YOUR STORY</p><h2 id="recovery-guide-title">あなたの物語は、<br>まだ続いている。</h2>
+                <ol><li><strong>先生に相談する</strong><span>ユーザー名を伝え、本人確認を受けてください。</span></li><li><strong>再設定コードを受け取る</strong><span>先生が発行した、一度だけ使えるコードを使います。</span></li><li><strong>新しいパスワードを設定する</strong><span>更新後は、ログイン画面から入り直せます。</span></li></ol>
+                <p class="recovery-help">コードが使えないときは、先生に新しいコードの発行をお願いしてください。</p>
+            </aside>
+        </div>
+    </section>
+    <section id="staff" class="form-page" hidden>
+        <div id="login-panel" class="narrow">
+            <div class="page-intro"><p class="eyebrow">TEACHER DASHBOARD</p><h1>先生用ログイン</h1><p>生徒の記事を確認して、公開をサポートします。</p></div>
+            <form id="login-form" class="panel stack">
+                <label>ユーザー名<input name="username" maxlength="32" autocomplete="username" required></label>
+                <label>パスワード<input name="password" type="password" minlength="4" maxlength="128" autocomplete="current-password" required></label>
+                <button>ログイン →</button>
+            </form>
+        </div>
+        <div id="dashboard" hidden>
+            <div class="bar"><div><p class="eyebrow">TEACHER DASHBOARD</p><h1>記事の確認</h1></div><button id="logout" class="secondary">ログアウト</button></div>
+            <p>個人情報が含まれていないか確認してから公開してください。</p>
+            <details class="panel reset-panel"><summary>生徒のパスワード再設定</summary>
+                <form id="reset-code-form" class="stack">
+                    <label>本人確認済みの生徒のユーザー名<input name="username" minlength="4" maxlength="32" required></label>
+                    <button>再設定コードを発行</button>
+                    <output id="reset-code" aria-live="polite"></output>
+                </form>
+            </details>
+            <h2>投稿された記事</h2>
+            <div id="staff-posts" class="cards"></div>
+            <h2>コメントの管理</h2>
+            <div id="staff-comments" class="cards"></div>
+        </div>
+    </section>
+    <noscript>このアプリを利用するには JavaScript を有効にしてください。</noscript>
+</main>
+<section class="community-band" aria-labelledby="community-title">
+    <span class="community-symbol" aria-hidden="true">“</span>
+    <h2 id="community-title">SHARE YOUR STORY</h2>
+    <p>あなたの経験が、誰かの新しい一歩になる。<br>学校の毎日を、あなたの言葉で伝えてみよう。</p>
+    <a class="button" href="#submit">ブログを書く ↗</a>
+</section>
+<footer class="site-footer">
+    <div class="wrap footer-columns">
+        <div class="footer-about"><h2>STUDENT VOICE</h2><p>学校の毎日を、みんなの言葉で。</p><p>生徒がつづるスクールブログ。<br>発見や経験を、ここからシェア。</p></div>
+        <div><h2>EXPLORE</h2><a href="#board">ブログを読む</a><a href="#submit">記事を書く</a><a href="#profile">マイプロフィール</a></div>
+        <div><h2>SUPPORT</h2><a href="#account">ログイン</a><a href="#forgot">パスワードの再設定</a><a href="#staff">先生用ダッシュボード</a><a href="/photo-credits.html">写真・アイコンのクレジット</a></div>
+        <div class="footer-join"><h2>YOUR NEXT CHAPTER</h2><p>あなたの声も、この物語の一部に。</p><a class="button" href="#signup">アカウントを作成 ↗</a></div>
+    </div>
+    <div class="wrap footer-bottom"><p>© Student Voice · School Blog Project</p><p>Photography from Unsplash · Blog icons by cube29 &amp; Circlon Tech / Flaticon</p></div>
+</footer>
+<dialog id="post-success" class="celebration" aria-labelledby="success-title" aria-describedby="success-description">
+    <div class="celebration-confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <span class="celebration-icon" aria-hidden="true">🎉</span>
+    <p class="eyebrow">YOUR VOICE MATTERS</p>
+    <h2 id="success-title">あなたの声、届きました！</h2>
+    <p id="success-description">書いてくれてありがとう。<br>あなたの発見が、誰かの新しい一歩になるかもしれません。</p>
+    <p class="celebration-status">記事を受け付けました。先生の確認後に公開されます。</p>
+    <div class="celebration-actions"><a class="button" href="#profile" id="success-profile">自分の記事を見る ↗</a><button type="button" id="success-close" class="secondary">もうひとつ書く</button></div>
+</dialog>
+</body>
+</html>
