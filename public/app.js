@@ -294,6 +294,7 @@ async function navigate() {
     document.querySelector('#student-session').hidden = true;
     document.querySelector('#student-forms').hidden = true;
     document.querySelector('#dashboard').hidden = true;
+    for (const link of document.querySelectorAll('[data-staff-link]')) link.hidden = true;
     document.querySelector('#login-panel').hidden = false;
     document.querySelector('#article-content').replaceChildren();
     document.querySelector('#profile-content').hidden = true;
@@ -316,6 +317,7 @@ async function navigate() {
         if (version !== viewVersion) return;
         csrf = session.csrf;
         signedIn = session.staff;
+        for (const link of document.querySelectorAll('[data-staff-link]')) link.hidden = !session.staff;
         studentSignedIn = session.student;
         document.querySelector('#suggestion-form').hidden = !session.student;
         document.querySelector('#writing-workspace').hidden = !session.student;
