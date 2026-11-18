@@ -11,8 +11,8 @@ for (const statement of schema.split(';')) {
 // Add email fields to an existing installation without changing account IDs.
 const [columns] = await db.query('SHOW COLUMNS FROM students');
 for (const [column, definition] of Object.entries({
-    email: 'VARCHAR(254) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL UNIQUE',
-    firebase_uid: 'VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL UNIQUE',
+    email: 'VARBINARY(254) DEFAULT NULL UNIQUE',
+    firebase_uid: 'VARBINARY(128) DEFAULT NULL UNIQUE',
     email_verified: 'TINYINT(1) NOT NULL DEFAULT 0',
 })) {
     if (!columns.some(item => item.Field === column)) await db.query('ALTER TABLE students ADD COLUMN ' + column + ' ' + definition);
