@@ -11,11 +11,19 @@ for (const statement of schema.split(';')) {
 // Add email fields to an existing installation without changing account IDs.
 const [columns] = await db.query('SHOW COLUMNS FROM students');
 for (const [column, definition] of Object.entries({
-    email: 'VARBINARY(254) DEFAULT NULL UNIQUE',
-    firebase_uid: 'VARBINARY(128) DEFAULT NULL UNIQUE',
+    email: 'VARBINARY(254) DEFAULT NULL',
+    firebase_uid: 'VARBINARY(128) DEFAULT NULL',
     email_verified: 'TINYINT(1) NOT NULL DEFAULT 0',
 })) {
     if (!columns.some(item => item.Field === column)) await db.query('ALTER TABLE students ADD COLUMN ' + column + ' ' + definition);
+}
+// TiDB requires ADD COLUMN and CREATE UNIQUE INDEX to be separate statements.
+const [indexes] = await db.query('SHOW INDEX FROM students');
+for (const column of ['email', 'firebase_uid']) {
+    const unique = indexes.some(index => Number(index.Non_unique) === 0
+        && index.Column_name === column
+        && indexes.filter(item => item.Key_name === index.Key_name).length === 1);
+    if (!unique) await db.query('CREATE UNIQUE INDEX uq_students_' + column + ' ON students (' + column + ')');
 }
 await db.query('CREATE TABLE IF NOT EXISTS media_files (name VARCHAR(50) PRIMARY KEY, data MEDIUMBLOB NOT NULL)');
 const username = process.env.INITIAL_STAFF_USERNAME || '';
