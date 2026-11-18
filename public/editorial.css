@@ -424,16 +424,16 @@ input, textarea, select, .article-content .cover { border-radius: 0; }
 .recovery-content .eyebrow, .recovery-guide .eyebrow { font-size: 10px; color: #3670c9; }
 .recovery-content h1 { font-size: 30px; margin: 12px 0; }
 .recovery-lead { color: #707988; font-size: 12px; line-height: 1.9; margin-bottom: 28px; }
-#reset-form { gap: 20px; }
-#reset-form label { font-size: 12px; gap: 8px; }
-#reset-form input { background: white; border: 1px solid #d8e0ee; border-radius: 24px; padding: 12px 16px; font-size: 14px; min-width: 0; }
-#reset-form small { font-size: 11px; color: #717b8c; font-weight: normal; line-height: 1.7; }
-#reset-form .password-field { border-radius: 24px; border-color: #d8e0ee; overflow: hidden; background: white; }
-#reset-form .password-field input { border: 0; flex: 1; width: 100%; }
-#reset-form .password-toggle { background: transparent; color: #555f70; border: 0; padding: 0 16px; font-size: 12px; }
-#reset-form .password-field:focus-within { outline-color: #0866ff; }
-#reset-form > button { background: #0866ff; border-color: #0866ff; border-radius: 24px; font-size: 13px; margin-top: 5px; }
-#reset-form > button:hover { background: #0053d8; }
+:is(#reset-form, #email-reset-form) { gap: 20px; }
+:is(#reset-form, #email-reset-form) label { font-size: 12px; gap: 8px; }
+:is(#reset-form, #email-reset-form) input { background: white; border: 1px solid #d8e0ee; border-radius: 24px; padding: 12px 16px; font-size: 14px; min-width: 0; }
+:is(#reset-form, #email-reset-form) small { font-size: 11px; color: #717b8c; font-weight: normal; line-height: 1.7; }
+:is(#reset-form, #email-reset-form) .password-field { border-radius: 24px; border-color: #d8e0ee; overflow: hidden; background: white; }
+:is(#reset-form, #email-reset-form) .password-field input { border: 0; flex: 1; width: 100%; }
+:is(#reset-form, #email-reset-form) .password-toggle { background: transparent; color: #555f70; border: 0; padding: 0 16px; font-size: 12px; }
+:is(#reset-form, #email-reset-form) .password-field:focus-within { outline-color: #0866ff; }
+:is(#reset-form, #email-reset-form) > button { background: #0866ff; border-color: #0866ff; border-radius: 24px; font-size: 13px; margin-top: 5px; }
+:is(#reset-form, #email-reset-form) > button:hover { background: #0053d8; }
 .recovery-guide { background: linear-gradient(145deg,#f7f9fe,#edf2fb); padding: 38px clamp(24px,4vw,60px); }
 .recovery-key { width: 155px; margin-bottom: 15px; }
 .recovery-key svg { width: 100%; filter: drop-shadow(6px 12px 12px #1b59ad20); }
@@ -457,3 +457,21 @@ input, textarea, select, .article-content .cover { border-radius: 0; }
 .feedback-dialog[data-kind="error"] .feedback-icon { color: #b22c26; background: #ffebe7; }
 .feedback-dialog[open] { animation: celebration-enter .2s ease-out; }
 @media (prefers-reduced-motion: reduce) { .feedback-dialog[open] { animation: none; } }
+
+/* Consistent fine-line icons, with restrained warm-metal accents. */
+.ui-icon { display: inline-block; width: 20px; height: 20px; flex: 0 0 20px; vertical-align: middle; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.top nav a, .header-account a { display: inline-flex; align-items: center; justify-content: center; gap: 9px; }
+.top nav a .ui-icon { color: #9b7b4d; }
+.header-account #nav-account { border-color: #d6c9b5; border-radius: 7px; background: #fcfaf6; }
+.header-account #nav-account .ui-icon { color: #9b7b4d; }
+.account-input { display: flex; position: relative; align-items: center; }
+.account-input > .ui-icon, .has-field-icon > .ui-icon { position: absolute; left: 15px; color: #8c99ac; pointer-events: none; z-index: 1; }
+.has-field-icon { position: relative; }
+#student-forms .account-input input, :is(#reset-form, #email-reset-form) .account-input input, #student-forms .has-field-icon input, :is(#reset-form, #email-reset-form) .has-field-icon input { padding-left: 46px; }
+@media (max-width: 600px) { .top nav a, .header-account a { gap: 6px; } .top .ui-icon { width: 17px; height: 17px; flex-basis: 17px; } }
+
+.text-action { background: transparent; border: 0; padding: 0; color: #2966ae; font-size: 11px; text-decoration: underline; text-align: left; }
+#student-forms .legacy-hint { font-size: 10px; color: #7b8593; margin-top: 18px; }
+.legacy-recovery { margin-top: 28px; border-top: 1px solid #d8e0ee; padding-top: 18px; }
+.legacy-recovery summary { font-size: 11px; color: #68778d; cursor: pointer; }
+.legacy-recovery > p { font-size: 12px; color: #68778d; }

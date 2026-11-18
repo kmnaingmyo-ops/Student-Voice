@@ -362,7 +362,7 @@ function onForm(id, path, done) {
         button.disabled = true;
         try {
             const data = new FormData(form);
-            const result = await api(path, ['#suggestion-form', '#profile-form'].includes(id) ? data : Object.fromEntries(data));
+            const result = await api(typeof path === 'function' ? path(data) : path, ['#suggestion-form', '#profile-form'].includes(id) ? data : Object.fromEntries(data));
             form.reset();
             await done(result);
         } catch (error) {
@@ -415,13 +415,26 @@ async function studentLoggedIn(result) {
     location.hash = 'submit';
     await navigate();
 }
-onForm('#student-login-form', '/student/login', async result => {
+onForm('#student-login-form', data => String(data.get('email') || '').includes('@') ? '/student/email-login' : '/student/login', async result => {
     await studentLoggedIn(result);
     showMessage('おかえりなさい！今日の発見を、あなたの言葉でつづってみよう。');
 });
 onForm('#signup-form', '/signup', async result => {
-    await studentLoggedIn(result);
-    showMessage('登録できました！あなたの物語が、ここから始まります。');
+    location.hash = 'account';
+    await navigate();
+    showMessage(result.message);
+});
+onForm('#email-reset-form', '/student/request-password-reset', async result => showMessage(result.message));
+document.querySelector('#resend-verification').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const form = document.querySelector('#student-login-form');
+    if (!form.reportValidity()) return;
+    button.disabled = true;
+    try {
+        const result = await api('/student/resend-verification', Object.fromEntries(new FormData(form)));
+        showMessage(result.message);
+    } catch (error) { showMessage(error.message, true); }
+    finally { button.disabled = false; }
 });
 onForm('#reset-form', '/student/reset', async result => {
     await navigate();
@@ -448,7 +461,7 @@ function renderProfile(profile) {
     document.querySelector('#profile-login').hidden = true;
     document.querySelector('#profile-content').hidden = false;
     document.querySelector('#profile-name').textContent = profile.display_name || profile.username;
-    document.querySelector('#profile-username').textContent = '@' + profile.username;
+    document.querySelector('#profile-username').textContent = profile.email || '@' + profile.username;
     document.querySelector('#profile-bio').textContent = profile.bio || '自己紹介を追加してみましょう。';
     document.querySelector('#profile-joined').textContent = '登録日 ' + new Intl.DateTimeFormat('ja-JP').format(new Date(profile.created_at));
     document.querySelector('#profile-avatar').src = profile.has_avatar ? '/api/profile/avatar?v=' + Date.now() : iconSources.outline;
