@@ -18,7 +18,7 @@ export function passwordProblem(password, email = '') {
         return 'パスワードは15〜64文字で設定してください。';
     }
     const plain = password.normalize('NFKC').toLowerCase();
-    const common = /^(password|letmein|welcome|qwerty|administrator|iloveyou|changeme|correcthorsebatterystaple)[\d\W_]*$/u;
+    const common = /^(password|letmein|welcome|qwerty|administrator|iloveyou|changeme|correcthorsebatterystaple)(?:\1)*[\d\W_]*$/u;
     const local = email.split('@')[0];
     const core = value => value.replace(/[0-9\s\p{P}\p{S}]/gu, '');
     const sequential = ['0123456789','9876543210','abcdefghijklmnopqrstuvwxyz','zyxwvutsrqponmlkjihgfedcba'].some(sequence => sequence.repeat(8).includes(plain));
