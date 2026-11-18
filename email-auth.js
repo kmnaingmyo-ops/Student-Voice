@@ -97,6 +97,8 @@ export function registerEmailAuth(app, limit, startSession) {
         const email = normalizeEmail(req.body?.email);
         const password = req.body?.password;
         if (!email || typeof password !== 'string' || !password || password.length > 128) return res.status(400).json({ error: '入力内容を確認してください。' });
+        const problem = passwordProblem(password, email);
+        if (problem) return res.status(400).json({ error: problem + ' 必要な場合はパスワードを再設定してください。' });
         const account = await firebaseRequest('signInWithPassword', { email, password, returnSecureToken: true });
         const verified = await verifiedFirebaseUser(account.idToken);
         if (!verified) return res.status(403).json({ error: '確認メールのリンクを開いてから、もう一度ログインしてください。' });

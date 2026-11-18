@@ -4,7 +4,7 @@ import { uploadImage, saveImage, removeImage, sendImage } from './media.js';
 export function registerProfileRoutes(app, requireStudent, limit) {
     app.get('/api/profile', requireStudent, async (req, res) => {
         const [students] = await db.execute(
-            'SELECT username, email, display_name, bio, avatar_name IS NOT NULL AS has_avatar, created_at FROM students WHERE id = ?',
+            'SELECT username, CONVERT(email USING utf8mb4) AS email, display_name, bio, avatar_name IS NOT NULL AS has_avatar, created_at FROM students WHERE id = ?',
             [req.session.studentId]);
         const [posts] = await db.execute(
             'SELECT id, title, category, body, status, created_at FROM suggestions WHERE student_id = ? ORDER BY id DESC',
