@@ -6,8 +6,8 @@ import { hashPassword } from '../password.js';
 const prompt = createInterface({ input: stdin, output: stdout });
 try {
     const username = (await prompt.question('Staff username (4–32 letters, digits or underscores): ')).trim();
-    const password = await prompt.question('Password (4–8 characters, visible while typing): ');
-    if (!/^[A-Za-z0-9_]{4,32}$/.test(username) || password.length < 4 || password.length > 8) {
+    const password = await prompt.question('Password (15–64 characters, visible while typing): ');
+    if (!/^[A-Za-z0-9_]{4,32}$/.test(username) || password.length < 15 || password.length > 64) {
         throw new Error('Check the username and password length.');
     }
     const hash = await hashPassword(password);
