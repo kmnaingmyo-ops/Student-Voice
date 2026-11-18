@@ -23,13 +23,13 @@
 .eyebrow { color: #506b7b; font-size: 10px; letter-spacing: 2.3px; font-weight: 500; }
 :focus-visible { outline-color: #7ca2b8; }
 .hero.adventure-hero { min-height: 440px; height: 52vh; max-height: 630px; display: grid; place-items: center; background: url('/thumbnails/campus.jpg') center / cover; }
-.cinema-shade { background: #172f4010; }
-.cinema-copy { padding: 34px 42px; width: min(520px, calc(100% - 40px)); margin: 0; background: #172f40f5; text-align: center; }
+.cinema-shade { background: linear-gradient(0deg, #071824b8, transparent 80%); }
+.cinema-copy { position: absolute; left: max(40px, calc((100% - 1180px) / 2)); bottom: 42px; padding: 0; width: min(580px, calc(100% - 80px)); margin: 0; background: transparent; text-align: left; text-shadow: 0 2px 12px #0005; }
 .cinema-copy .eyebrow { font-size: 9px; letter-spacing: 3.8px; margin-bottom: 17px; color: #c1d2dc; }
 .cinema-copy h1 { font-family: var(--serif); font-size: clamp(30px, 3.2vw, 46px); font-weight: 400; line-height: 1.65; letter-spacing: .5px; }
 .cinema-copy > p:not(.eyebrow) { color: #d7e2e8; font-size: 11px; margin: 15px 0 7px; }
 .cinema-link { padding: 7px 0; gap: 25px; font-size: 10px; }
-.cinema-caption { font-size: 8px; left: 28px; bottom: 18px; }
+.cinema-caption { display: none; }
 .journal-intro { padding: 58px 0 8px; }
 .journal-intro .eyebrow { margin-bottom: 12px; }
 .journal-intro h2 { font-family: var(--serif); font-size: 30px; font-weight: 400; letter-spacing: .5px; margin-bottom: 13px; }
@@ -127,7 +127,7 @@
     .header-row nav { margin-top: 3px; padding-top: 12px; }
     .header-account { gap: 14px; font-size: 11px; }
     .hero.adventure-hero { min-height: 390px; height: 50vh; }
-    .cinema-copy { width: min(440px, calc(100% - 48px)); padding: 28px 20px; }
+    .cinema-copy { left: 24px; bottom: 30px; width: calc(100% - 48px); padding: 0; }
     .cinema-copy h1 { font-size: 32px; }
     .cinema-copy > p:not(.eyebrow) { font-size: 10px; }
     .journal-intro { padding-top: 42px; }
