@@ -203,7 +203,14 @@ async function refreshSocial(post) {
 function showMessage(message, error = false) {
     notice.textContent = message;
     notice.className = error ? 'error' : 'notice';
-    notice.hidden = !message;
+    const dialog = document.querySelector('#feedback-dialog');
+    notice.hidden = !message || Boolean(dialog?.showModal);
+    if (!message || !dialog?.showModal) return;
+    dialog.dataset.kind = error ? 'error' : 'success';
+    document.querySelector('#feedback-title').textContent = error ? 'もう一度、確認してみよう。' : 'できました！';
+    document.querySelector('#feedback-icon').textContent = error ? '!' : '✓';
+    document.querySelector('#feedback-message').textContent = message;
+    if (!dialog.open) dialog.showModal();
 }
 
 async function api(path, data) {
@@ -349,7 +356,7 @@ function onForm(id, path, done) {
     document.querySelector(id).addEventListener('submit', async event => {
         event.preventDefault();
         const form = event.currentTarget;
-        const button = form.querySelector('button');
+        const button = form.querySelector('button[type="submit"], button:not([type])');
         button.disabled = true;
         try {
             const data = new FormData(form);
@@ -406,14 +413,21 @@ async function studentLoggedIn(result) {
     location.hash = 'submit';
     await navigate();
 }
-onForm('#student-login-form', '/student/login', studentLoggedIn);
-onForm('#signup-form', '/signup', studentLoggedIn);
+onForm('#student-login-form', '/student/login', async result => {
+    await studentLoggedIn(result);
+    showMessage('おかえりなさい！今日の発見を、あなたの言葉でつづってみよう。');
+});
+onForm('#signup-form', '/signup', async result => {
+    await studentLoggedIn(result);
+    showMessage('登録できました！あなたの物語が、ここから始まります。');
+});
 onForm('#reset-form', '/student/reset', async result => {
     await navigate();
     showMessage(result.message);
 });
 onForm('#reset-code-form', '/staff/reset-code', async result => {
     document.querySelector('#reset-code').textContent = result.code + ' — ' + result.message;
+    showMessage('再設定コードを発行しました。画面に表示されたコードを生徒に渡してください。');
 });
 onForm('#profile-form', '/profile', async result => {
     await navigate();
@@ -543,3 +557,8 @@ for (const toggle of document.querySelectorAll('.password-toggle')) {
         toggle.setAttribute('aria-pressed', String(showing));
     });
 }
+
+// Native dialogs support keyboard focus, Escape and an explicit close button.
+document.querySelector('#feedback-close').addEventListener('click', () => {
+    document.querySelector('#feedback-dialog').close();
+});

@@ -445,3 +445,15 @@ input, textarea, select, .article-content .cover { border-radius: 0; }
 .recovery-guide li span { color: #6c7889; font-size: 12px; line-height: 1.8; }
 .recovery-help { border-top: 1px solid #d8e0ee; margin-top: 28px; padding-top: 20px; font-size: 11px; line-height: 1.8; color: #6c7889; }
 @media (max-width: 760px) { .recovery-layout { grid-template-columns: 1fr; } .recovery-content { padding: 30px 24px; } .recovery-guide { padding: 28px 24px; } .recovery-key { width: 100px; } .recovery-guide h2 { font-size: 24px; } }
+
+/* Shared feedback for every account, profile, comment and moderation action. */
+.feedback-dialog { position: fixed; inset: 0; margin: auto; width: min(440px,calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 0; border-top: 5px solid #0866ff; border-radius: 12px; padding: 32px; text-align: center; color: #202b28; background: #fff; box-shadow: 0 20px 80px #0004; }
+.feedback-dialog::backdrop { background: #15231cb3; backdrop-filter: blur(4px); }
+.feedback-icon { display: grid; place-items: center; margin: 0 auto 20px; width: 64px; height: 64px; border-radius: 50%; background: #e8f1ff; color: #0866ff; font-size: 32px; font-weight: bold; }
+.feedback-dialog h2 { font-size: 23px; margin: 12px 0; }
+.feedback-dialog p { line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; color: #647068; font-size: 14px; }
+.feedback-dialog button { width: 100%; margin-top: 12px; background: #0866ff; border-color: #0866ff; border-radius: 24px; }
+.feedback-dialog[data-kind="error"] { border-top-color: #cc3b32; }
+.feedback-dialog[data-kind="error"] .feedback-icon { color: #b22c26; background: #ffebe7; }
+.feedback-dialog[open] { animation: celebration-enter .2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .feedback-dialog[open] { animation: none; } }
