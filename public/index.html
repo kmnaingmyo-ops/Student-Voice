@@ -6,6 +6,7 @@
     <title>Student Voice | みんなのスクールブログ</title>
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/editorial.css">
+    <link rel="stylesheet" href="/school.css">
     <meta name="description" content="Student Voice — 生徒がつづる、教室の向こうのストーリー。">
     <script src="/app.js" defer></script>
     <script src="/navigation.js" defer></script>
@@ -39,27 +40,28 @@
             </video>
             <div class="cinema-shade"></div>
             <div class="cinema-copy">
-                <p class="eyebrow">STUDENT VOICE / SCHOOL STORIES</p>
-                <h1 id="cinema-title" lang="en"><span>YOUR VOICE.</span><br><span>OUR SCHOOL.</span></h1>
-                <p>いつもの毎日を、新しい視点で。<br>私たちの経験が、学校の物語になる。</p>
-                <a class="cinema-link" href="#board" id="explore-journal">みんなの記事へ <span aria-hidden="true">↓</span></a>
+                <p class="eyebrow">THE STUDENT JOURNAL</p>
+                <h1 id="cinema-title">学校の今を、<br>私たちの言葉で。</h1>
+                <p>小さな発見も、大きな挑戦も。ここから、みんなの物語に。</p>
+                <a class="cinema-link" href="#board" id="explore-journal">記事を読む <span aria-hidden="true">↓</span></a>
             </div>
-            <div class="cinema-caption">DISCOVER. SHARE. CONNECT.</div>
+            <div class="cinema-caption">STORIES FROM OUR EVERYDAY</div>
         </section>
-        <div class="journal-intro" id="journal" tabindex="-1"><p class="eyebrow">OUR STORIES</p><h2>私たちの、スクールライフ。</h2><p>授業、放課後、新しい挑戦。みんなの経験を読んでみよう。</p></div>
+        <div class="journal-intro" id="journal" tabindex="-1"><p class="eyebrow">OUR SCHOOL, OUR STORIES</p><h2>スクールジャーナル</h2><p>授業の発見、放課後の時間、新しい挑戦。気になる物語を見つけよう。</p></div>
         <div id="category-filters" class="filters" aria-label="ブログのカテゴリ"></div>
         <div id="featured-post"></div>
         <div class="section-heading board-heading"><h2>みんなの記事</h2><span id="post-count"></span></div>
         <div id="public-posts" class="cards blog-grid" aria-live="polite"></div>
         <nav id="pagination" class="pagination" aria-label="記事一覧のページ"></nav>
         <section id="recent-stories" class="recent-stories" aria-labelledby="recent-title" hidden>
-            <div class="recent-heading"><span aria-hidden="true"></span><h2 id="recent-title">RECENT BLOG POSTS</h2><p>新しく公開された記事</p></div>
+            <div class="recent-heading"><span aria-hidden="true"></span><p class="eyebrow">LATEST STORIES</p><h2 id="recent-title">最近、届いた声。</h2><p>新しく公開された記事を、もう少し。</p></div>
             <div id="recent-posts" class="recent-grid"></div>
         </section>
     </section>
     <section id="article" hidden>
         <a class="back-link" href="#board">← ブログ一覧へ</a>
         <article id="article-content" class="article-content"></article>
+        <section id="related-stories" class="related-stories" aria-labelledby="related-title" hidden><p class="eyebrow">KEEP EXPLORING</p><h2 id="related-title">次に読みたい、物語。</h2><div id="related-posts" class="related-grid"></div></section>
     </section>
     <section id="submit" class="form-page" hidden>
         <div class="writer-hero">
@@ -249,8 +251,8 @@
     <noscript>このアプリを利用するには JavaScript を有効にしてください。</noscript>
 </main>
 <section class="community-band" aria-labelledby="community-title">
-    <span class="community-symbol" aria-hidden="true">“</span>
-    <h2 id="community-title">SHARE YOUR STORY</h2>
+    <span class="community-symbol" aria-hidden="true">YOUR NEXT CHAPTER</span>
+    <h2 id="community-title">次の物語は、あなたから。</h2>
     <p>あなたの経験が、誰かの新しい一歩になる。<br>学校の毎日を、あなたの言葉で伝えてみよう。</p>
     <a class="button" href="#submit">ブログを書く ↗</a>
 </section>

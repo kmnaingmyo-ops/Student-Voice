@@ -192,6 +192,9 @@ function renderArticle(post, social) {
         socialSection.append(card);
     }
     target.append(socialSection);
+    const related = publicPosts.filter(item => item.id !== post.id).slice(0, 3);
+    document.querySelector('#related-stories').hidden = !related.length;
+    document.querySelector('#related-posts').replaceChildren(...related.map(item => blogCard(item)));
 }
 
 async function refreshSocial(post) {
