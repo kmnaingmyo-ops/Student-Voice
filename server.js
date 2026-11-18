@@ -1,3 +1,4 @@
+import { registerEmailAuth, verifiedFirebaseUser, passwordProblem } from './email-auth.js';
 import express from 'express';
 import { resolve } from 'node:path';
 import session from 'express-session';
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
         'Content-Security-Policy': "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' blob:",
         'X-Content-Type-Options': 'nosniff',
         'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
     });
     next();
 });
@@ -72,12 +74,27 @@ async function requireStudent(req, res, next) {
         delete req.session.studentId;
         return res.status(401).json({ error: '投稿するには生徒アカウントでログインしてください。' });
     }
+    if (req.session.firebaseToken) {
+        try {
+            const user = await verifiedFirebaseUser(req.session.firebaseToken);
+            if (!user || user.localId !== req.session.firebaseUid) {
+                delete req.session.studentId;
+                return res.status(401).json({ error: 'もう一度ログインしてください。' });
+            }
+        } catch (error) {
+            if (error.status === 401) {
+                delete req.session.studentId;
+                return res.status(401).json({ error: 'もう一度ログインしてください。' });
+            }
+            throw error;
+        }
+    }
     next();
 }
 
-function studentCredentials(username, password) {
+function studentCredentials(username, password, minimum = 15) {
     return typeof username === 'string' && /^[A-Za-z0-9_]{4,32}$/.test(username)
-        && typeof password === 'string' && password.length >= 4 && password.length <= 8;
+        && typeof password === 'string' && password.length >= minimum && password.length <= 64;
 }
 
 function startStudentSession(req, res, next, student) {
@@ -85,6 +102,10 @@ function startStudentSession(req, res, next, student) {
         if (error) return next(error);
         req.session.studentId = student.id;
         req.session.passwordVersion = student.password_version;
+        if (student.firebaseToken) {
+            req.session.firebaseToken = student.firebaseToken;
+            req.session.firebaseUid = student.firebaseUid;
+        }
         req.session.csrf = randomBytes(32).toString('hex');
         req.session.save(error => {
             if (error) return next(error);
@@ -93,25 +114,13 @@ function startStudentSession(req, res, next, student) {
     });
 }
 
-app.post('/api/signup', loginLimit, async (req, res, next) => {
-    const { username, password } = req.body || {};
-    if (!studentCredentials(username, password)) {
-        return res.status(400).json({ error: 'ユーザー名は半角英数字・_の4〜32文字、パスワードは4〜8文字です。' });
-    }
-    try {
-        const [result] = await db.execute('INSERT INTO students (username, password_hash) VALUES (?, ?)',
-            [username, await hashPassword(password)]);
-        startStudentSession(req, res, next, { id: result.insertId, password_version: 1 });
-    } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'このユーザー名は使用されています。' });
-        throw error;
-    }
-});
+registerEmailAuth(app, loginLimit, startStudentSession);
 
 app.post('/api/student/login', loginLimit, async (req, res, next) => {
-    const { username, password } = req.body || {};
-    if (!studentCredentials(username, password)) return res.status(400).json({ error: '入力内容を確認してください。' });
-    const [rows] = await db.execute('SELECT id, password_hash, password_version FROM students WHERE username = ?', [username]);
+    const { username: oldUsername, email, password } = req.body || {};
+    const username = oldUsername || email;
+    if (!studentCredentials(username, password, 4)) return res.status(400).json({ error: '入力内容を確認してください。' });
+    const [rows] = await db.execute('SELECT id, password_hash, password_version FROM students WHERE username = ? AND firebase_uid IS NULL', [username]);
     if (!await verifyPassword(password, rows[0]?.password_hash || dummyHash)) {
         return res.status(401).json({ error: 'ユーザー名またはパスワードを確認してください。' });
     }
@@ -120,12 +129,12 @@ app.post('/api/student/login', loginLimit, async (req, res, next) => {
 
 app.post('/api/student/reset', resetLimit, async (req, res) => {
     const { username, password, code } = req.body || {};
-    if (!studentCredentials(username, password) || typeof code !== 'string' || !/^[a-f0-9]{32}$/.test(code)) {
-        return res.status(400).json({ error: 'ユーザー名・再設定コード・4〜8文字のパスワードを確認してください。' });
+    if (!studentCredentials(username, password) || passwordProblem(password) || typeof code !== 'string' || !/^[a-f0-9]{32}$/.test(code)) {
+        return res.status(400).json({ error: 'ユーザー名・再設定コード・15〜64文字のパスワードを確認してください。' });
     }
     const digest = createHash('sha256').update(code).digest('hex');
     const [result] = await db.execute(
-        'UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE username = ? AND reset_hash = ? AND reset_expires > UTC_TIMESTAMP()',
+        'UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE username = ? AND firebase_uid IS NULL AND reset_hash = ? AND reset_expires > UTC_TIMESTAMP()',
         [await hashPassword(password), username, digest]);
     if (!result.affectedRows) return res.status(400).json({ error: 'コードが無効か、有効期限が切れています。' });
     res.json({ message: 'パスワードを更新しました。新しいパスワードでログインしてください。' });

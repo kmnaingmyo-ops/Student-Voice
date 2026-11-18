@@ -1,6 +1,6 @@
 # Student Voice — School Blog
 
-A Japanese student blog built with Node.js, Express, MySQL, HTML, CSS, and JavaScript. Students sign up and log in to write articles. Teachers review articles before publication.
+A Japanese student blog built with Node.js, Express, MySQL, HTML, CSS, and JavaScript. New students sign up with email and password, verify their email address, and log in to write articles. Teachers review articles before publication.
 
 ## Live website
 
@@ -88,15 +88,11 @@ Node.js serves the website. MAMP supplies MySQL. MAMP's PHP version does not aff
 - Pending and hidden articles stay private, including their individual article URLs.
 - Article author usernames stay private. Commenter usernames are displayed beside their comments. The database links each new article to the submitting student.
 
-Student usernames use 4–32 ASCII letters, digits, or underscores. New student and teacher passwords use 4–8 characters. Existing longer teacher passwords still work.
+Student usernames use 4–32 ASCII letters, digits, or underscores. New student and teacher passwords use 15–64 characters. Student usernames use 4–32 letters, digits or underscores. Existing student passwords of 4–7 characters and existing teacher passwords still work for sign-in. Password resets use the new 15–64 character rule.
 
 ## Forgotten passwords
 
-The student tells a teacher their username. After confirming the student's identity through the school's usual process, the teacher opens **先生用 → 生徒のパスワード再設定**, enters the username, and issues a reset code.
-
-The student chooses **ログイン → パスワードを忘れた方** and enters their username, code, and new password. The code expires after 15 minutes and works once. Issuing a new code invalidates the old one. A completed reset invalidates existing student sessions.
-
-Teacher passwords can be reset using `npm run create-staff`.
+New email accounts request a reset link from the recovery page. Firebase sends the email and enforces the required 15–64 character password policy. Links expire and can be used only once. Existing username accounts use the collapsed legacy section and ask a teacher for a code after identity verification. Teacher passwords can be reset with npm run create-staff. Existing short passwords remain usable for login; new passwords must follow the new rule.
 
 ## Sample posts
 
@@ -167,3 +163,12 @@ Photographer names, original source links, and the license link are in public/ph
 ## Video in this GitHub copy
 
 The browser-compatible 720p intro is included. The 1.6 GB original 8K file is kept out of Git. To play the original locally, copy student-hero-8k.mp4 into public/assets; it is ignored by Git. The homepage automatically uses the included fallback when the original is absent. Never commit your local .env or student uploads.
+
+
+## Verified email accounts
+
+New students register with an email address and a 15–64 character password. Common and repetitive passwords are rejected. Firebase Authentication sends verification and recovery emails; inbox ownership must be verified before sign-in creates a local session or permits posting. Format checks do not prove that a mailbox exists, and a disposable mailbox can still be verified if someone controls it.
+
+Set FIREBASE_WEB_API_KEY in the server environment using the Web API key from your Firebase project. Enable Email/Password authentication and a required minimum password length of 15 in Firebase Authentication settings. Keep the Spark (free) plan. New local installations use database.sql; existing local installations import upgrade-email.sql once. Cloud startup adds the new columns without replacing account IDs or posts.
+
+Existing username accounts continue to sign in using the same login field. They are not falsely marked as email-verified. Their teacher-issued recovery codes remain under the recovery page's legacy-account section. Firebase email accounts use email reset links instead. Email passwords are handled by Firebase; a random unusable local password hash prevents username sign-in from bypassing Firebase verification. Public comments continue to use an internal alias, never the student's email address.
