@@ -46,6 +46,21 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - name: Build non-root container
         run: docker build -t student-voice-security-check .
+      - name: Test the actual restricted container with MySQL
+        run: node --test tests/access.test.mjs
+        env:
+          SECURITY_TEST_CONTAINER: 'true'
+          SECURITY_TEST_IMAGE: student-voice-security-check
+          DB_NAME: sv_security_container_ci
+      - name: Create production dependency inventory
+        run: npm sbom --sbom-format=cyclonedx --omit=dev > sbom.cdx.json
+      - name: Save dependency inventory
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: production-dependency-inventory
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 14
   codeql:
     runs-on: ubuntu-latest
     timeout-minutes: 15

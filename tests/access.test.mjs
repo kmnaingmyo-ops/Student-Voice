@@ -10,7 +10,7 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
     assert.match(name || '', /^sv_security_[a-z0-9_]+$/);
     process.env.SESSION_SECRET = 'isolated-integration-key-never-production'.repeat(2);
     const connection = await mysql.createConnection({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root', password: process.env.DB_PASSWORD || '', multipleStatements: true });
-    let server, pool;
+    let server, pool, stopContainer;
     const runtimeUser = 'svt_' + randomBytes(5).toString('hex');
     const runtimePassword = randomBytes(32).toString('base64');
     try {
@@ -28,19 +28,27 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         const { hashPassword } = await import('../password.js');
         const password = 'private teacher testing passphrase';
         const [{ insertId: id }] = await connection.execute('INSERT INTO staff (username, password_hash) VALUES (?, ?)', ['testteacher', await hashPassword(password)]);
-        const { app } = await import('../server.js');
         pool = (await import('../database.js')).db;
         const denied = error => ['ER_TABLEACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR'].includes(error.code);
         await assert.rejects(pool.query('CREATE TABLE should_not_create (id INT)'), denied);
         await assert.rejects(pool.query('ALTER TABLE staff ADD COLUMN should_not_alter INT'), denied);
         await assert.rejects(pool.query('DROP TABLE staff'), denied);
-        server = app.listen(0, '127.0.0.1');
-        await new Promise(resolve => server.on('listening', resolve));
-        const base = 'http://127.0.0.1:' + server.address().port + '/api';
+        let base;
+        if (process.env.SECURITY_TEST_CONTAINER === 'true') {
+            const { startRestrictedContainer } = await import('./container-runner.mjs');
+            const container = await startRestrictedContainer();
+            base = container.base;
+            stopContainer = container.stop;
+        } else {
+            const { app } = await import('../server.js');
+            server = app.listen(0, '127.0.0.1');
+            await new Promise(resolve => server.on('listening', resolve));
+            base = 'http://127.0.0.1:' + server.address().port + '/api';
+        }
         const client = () => {
             let cookie = '', csrf = '';
             return async (path, data, badCsrf = false) => {
-                const response = await fetch(base + path, { method: data ? 'POST' : 'GET', headers: { Cookie: cookie, ...(data ? { 'Content-Type': 'application/json', 'X-CSRF-Token': badCsrf ? 'bad' : csrf } : {}) }, body: data ? JSON.stringify(data) : undefined });
+                const response = await fetch(base + path, { method: data ? 'POST' : 'GET', headers: { Cookie: cookie, 'X-Forwarded-Proto': 'https', ...(data ? { 'Content-Type': 'application/json', 'X-CSRF-Token': badCsrf ? 'bad' : csrf } : {}) }, body: data ? JSON.stringify(data) : undefined });
                 const cookies = response.headers.getSetCookie();
                 if (cookies.length) cookie = cookies.map(item => item.split(';')[0]).join('; ');
                 const body = await response.json();
@@ -51,6 +59,10 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         const a = client(), old = client(), fresh = client();
         const initial = await a('/session');
         assert.equal(initial.headers.get('x-content-type-options'), 'nosniff');
+        if (stopContainer) {
+            assert.match(initial.headers.get('strict-transport-security'), /max-age=31536000/);
+            assert(initial.headers.getSetCookie().some(value => /;\s*Secure(?:;|$)/i.test(value)));
+        }
         assert.equal((await a('/staff/suggestions')).status, 401);
         assert.equal((await a('/staff/security-events')).status, 401);
         assert.equal((await a('/login', { username: 'testteacher', password }, true)).status, 403);
@@ -121,6 +133,7 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         const [sessions] = await connection.query('SELECT id, data FROM app_sessions');
         assert(sessions.every(item => !item.data.includes('not-plaintext') && item.id.toString() !== 'fixture-session-id'));
     } finally {
+        if (stopContainer) await stopContainer();
         if (server) await new Promise(resolve => server.close(resolve));
         if (pool) await pool.end();
         // Only the explicitly named disposable test database can be removed.

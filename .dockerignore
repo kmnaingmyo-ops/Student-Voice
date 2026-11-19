@@ -7,6 +7,7 @@ operator.env
 operator.env.*
 backups
 *.svbackup
+sbom.cdx.json
 uploads
 *.log
 public/assets/student-hero-8k.mp4
