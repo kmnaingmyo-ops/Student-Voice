@@ -73,6 +73,11 @@ jobs:
           persist-credentials: false
       - name: Build container for scanning
         run: docker build -t student-voice-security-check .
+      - name: Test the restricted runtime
+        run: >-
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges
+          --entrypoint node student-voice-security-check --input-type=module
+          -e "import express from 'express'; import sharp from 'sharp'; import * as OTPAuth from 'otpauth'; import {access} from 'node:fs/promises'; if(process.getuid()===0) throw Error('Runtime must not be root'); await access('/usr/local/bin/npm').then(()=>{throw Error('npm must not ship in runtime')},()=>{}); await sharp({create:{width:2,height:2,channels:3,background:'#fff'}}).webp().toBuffer(); if(!express || !OTPAuth.TOTP) throw Error('Missing runtime dependency');"
       - name: Scan container packages
         id: scan
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
