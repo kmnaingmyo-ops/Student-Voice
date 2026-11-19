@@ -102,7 +102,7 @@ async function requireStudent(req, res, next) {
 
 function studentCredentials(username, password, minimum = 15) {
     return typeof username === 'string' && /^[A-Za-z0-9_]{4,32}$/.test(username)
-        && typeof password === 'string' && password.length >= minimum && password.length <= 64;
+        && typeof password === 'string' && [...password].length >= minimum && [...password].length <= 64;
 }
 
 function startStudentSession(req, res, next, student) {
@@ -132,7 +132,36 @@ app.post('/api/student/login', loginLimit, async (req, res, next) => {
     if (!await verifyPassword(password, rows[0]?.password_hash || dummyHash)) {
         return res.status(401).json({ error: 'ユーザー名またはパスワードを確認してください。' });
     }
+    if (passwordProblem(password, username)) {
+        // This challenge proves the old password, but grants no student privileges.
+        await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
+        req.session.studentUpgrade = { id: rows[0].id, at: Date.now(), version: rows[0].password_version, tag: fingerprint(rows[0].password_hash) };
+        req.session.csrf = randomBytes(32).toString('hex');
+        await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+        return res.json({ passwordUpgradeRequired: true, csrf: req.session.csrf });
+    }
     startStudentSession(req, res, next, rows[0]);
+});
+
+app.post('/api/student/upgrade-password', loginLimit, async (req, res, next) => {
+    const challenge = req.session.studentUpgrade;
+    const restart = () => {
+        delete req.session.studentUpgrade;
+        return res.status(401).json({ error: '有効期限が切れました。もう一度ログインしてください。' });
+    };
+    if (!challenge || !Number.isFinite(challenge.at) || Date.now() - challenge.at > 300000 || challenge.at > Date.now()) return restart();
+    const { password, password_confirmation: confirmation } = req.body || {};
+    const [rows] = await db.execute('SELECT id, username, password_hash, password_version FROM students WHERE id = ? AND firebase_uid IS NULL', [challenge.id]);
+    const student = rows[0];
+    if (!student || student.password_version !== challenge.version || fingerprint(student.password_hash) !== challenge.tag) return restart();
+    const problem = passwordProblem(password, student.username);
+    if (problem) return res.status(400).json({ error: problem });
+    if (password !== confirmation) return res.status(400).json({ error: '確認用パスワードが一致しません。' });
+    // Compare the original hash and version so a concurrent reset cannot be overwritten.
+    const [updated] = await db.execute('UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE id = ? AND firebase_uid IS NULL AND password_version = ? AND password_hash = ?',
+        [await hashPassword(password), student.id, student.password_version, student.password_hash]);
+    if (updated.affectedRows !== 1) return restart();
+    startStudentSession(req, res, next, { id: student.id, password_version: student.password_version + 1 });
 });
 
 app.post('/api/student/reset', resetLimit, async (req, res) => {
