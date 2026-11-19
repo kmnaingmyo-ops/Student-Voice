@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import mysql from 'mysql2/promise';
 import * as OTPAuth from 'otpauth';
+import { randomBytes } from 'node:crypto';
 
 test('database-backed sessions, permissions, MFA replay/recovery and revocation', { skip: process.env.SECURITY_TEST_DB !== 'true' }, async () => {
     const name = process.env.DB_NAME;
@@ -10,14 +11,29 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
     process.env.SESSION_SECRET = 'isolated-integration-key-never-production'.repeat(2);
     const connection = await mysql.createConnection({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root', password: process.env.DB_PASSWORD || '', multipleStatements: true });
     let server, pool;
+    const runtimeUser = 'svt_' + randomBytes(5).toString('hex');
+    const runtimePassword = randomBytes(32).toString('base64');
     try {
         await connection.query((await readFile(new URL('../database.sql', import.meta.url), 'utf8')).replaceAll('student_voice', name));
         await connection.query('USE ' + name);
+        await connection.query('CREATE USER ?@? IDENTIFIED BY ?', [runtimeUser, '%', runtimePassword]);
+        const permissions = (await readFile(new URL('../runtime-permissions.sql', import.meta.url), 'utf8'))
+            .replace(/^--.*$/gm, '').replaceAll('`student_voice`', '`' + name + '`')
+            .replaceAll("'sv_runtime'@'%'", "'" + runtimeUser + "'@'%'");
+        await connection.query('CREATE TABLE media_files (name VARCHAR(50) PRIMARY KEY, data MEDIUMBLOB NOT NULL)');
+        for (const sql of permissions.split(';').map(value => value.trim()).filter(Boolean)) await connection.query(sql);
+        process.env.DB_USER = runtimeUser;
+        process.env.DB_PASSWORD = runtimePassword;
+        process.env.DB_AUTO_MIGRATE = 'false';
         const { hashPassword } = await import('../password.js');
         const password = 'private teacher testing passphrase';
         const [{ insertId: id }] = await connection.execute('INSERT INTO staff (username, password_hash) VALUES (?, ?)', ['testteacher', await hashPassword(password)]);
         const { app } = await import('../server.js');
         pool = (await import('../database.js')).db;
+        const denied = error => ['ER_TABLEACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR'].includes(error.code);
+        await assert.rejects(pool.query('CREATE TABLE should_not_create (id INT)'), denied);
+        await assert.rejects(pool.query('ALTER TABLE staff ADD COLUMN should_not_alter INT'), denied);
+        await assert.rejects(pool.query('DROP TABLE staff'), denied);
         server = app.listen(0, '127.0.0.1');
         await new Promise(resolve => server.on('listening', resolve));
         const base = 'http://127.0.0.1:' + server.address().port + '/api';
@@ -109,6 +125,7 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         if (pool) await pool.end();
         // Only the explicitly named disposable test database can be removed.
         await connection.query('DROP DATABASE ' + name);
+        await connection.query('DROP USER IF EXISTS ?@?', [runtimeUser, '%']);
         await connection.end();
     }
 });
