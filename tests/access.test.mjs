@@ -36,11 +36,16 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         const initial = await a('/session');
         assert.equal(initial.headers.get('x-content-type-options'), 'nosniff');
         assert.equal((await a('/staff/suggestions')).status, 401);
+        assert.equal((await a('/staff/security-events')).status, 401);
         assert.equal((await a('/login', { username: 'testteacher', password }, true)).status, 403);
         await old('/session');
         assert.equal((await a('/login', { username: 'testteacher', password })).status, 200);
         assert.equal((await old('/login', { username: 'testteacher', password })).status, 200);
         assert.equal((await a('/staff/suggestions')).status, 200);
+        const monitor = await a('/staff/security-events');
+        assert.equal(monitor.status, 200);
+        assert(monitor.body.events.length <= 50);
+        assert(!JSON.stringify(monitor.body).includes(password));
         const setup = await a('/staff/mfa-setup', { password });
         assert.equal(setup.status, 200);
         const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(setup.body.secret), algorithm: 'SHA1', digits: 6, period: 30 });
