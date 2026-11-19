@@ -292,6 +292,12 @@ async function navigate() {
     document.querySelector('#staff-posts').replaceChildren();
     document.querySelector('#staff-comments').replaceChildren();
     document.querySelector('#reset-code').textContent = '';
+    document.querySelector('#mfa-secret').textContent = '';
+    document.querySelector('#mfa-recovery-codes').textContent = '';
+    document.querySelector('#mfa-enrollment').hidden = true;
+    document.querySelector('#mfa-recovery').hidden = true;
+    document.querySelector('#mfa-login-form').hidden = true;
+    document.querySelector('#login-form').hidden = false;
     document.querySelector('#suggestion-form').hidden = true;
     document.querySelector('#writing-workspace').hidden = true;
     document.querySelector('#student-session').hidden = true;
@@ -351,6 +357,7 @@ async function navigate() {
             document.querySelector('#dashboard').hidden = false;
             renderPosts(document.querySelector('#staff-posts'), posts, true);
             renderStaffComments(comments);
+            await loadStaffSecurity();
         }
     } catch (error) {
         if (version === viewVersion) showMessage(error.message, true);
@@ -409,6 +416,13 @@ onForm('#suggestion-form', '/suggestions', async result => {
 });
 onForm('#login-form', '/login', async result => {
     csrf = result.csrf;
+    document.querySelector('#login-form').reset();
+    if (result.mfaRequired) {
+        document.querySelector('#login-form').hidden = true;
+        document.querySelector('#mfa-login-form').hidden = false;
+        document.querySelector('#mfa-login-form input').focus();
+        return;
+    }
     await navigate();
     showMessage('ログインしました。');
 });

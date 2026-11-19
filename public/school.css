@@ -1,4 +1,7 @@
 /* School journal theme. Layout and account behaviour stay in the base files. */
+#staff-security-panel { margin-block: 24px; }
+#staff-security-panel form { max-width: 600px; margin-block: 24px; }
+#mfa-secret, #mfa-recovery-codes { display: block; overflow-wrap: anywhere; white-space: pre-wrap; padding: 16px; background: #eff5f7; font-family: monospace; }
 :root {
     --purple: #172f40;
     --muted: #687681;

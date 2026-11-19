@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/school.css">
     <meta name="description" content="Student Voice — 生徒がつづる、教室の向こうのストーリー。">
     <script src="/app.js" defer></script>
+    <script src="/security-ui.js" defer></script>
     <script src="/navigation.js" defer></script>
 
     <script src="/cinema.js" defer></script>
@@ -231,10 +232,18 @@
                 <label>パスワード<input name="password" type="password" minlength="4" maxlength="128" autocomplete="current-password" required></label>
                 <button>ログイン →</button>
             </form>
+            <form id="mfa-login-form" class="panel stack" hidden><h2>二段階認証</h2><label>認証アプリのコード、または回復コード<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button>認証してログイン</button></form>
         </div>
         <div id="dashboard" hidden>
             <div class="bar"><div><p class="eyebrow">TEACHER DASHBOARD</p><h1>記事の確認</h1></div><button id="logout" class="secondary">ログアウト</button></div>
             <p>個人情報が含まれていないか確認してから公開してください。</p>
+            <details id="staff-security-panel" class="panel"><summary>アカウントのセキュリティ</summary><p id="security-status" role="status"></p>
+                <form id="mfa-setup-form" class="stack"><h2>二段階認証を設定</h2><p>認証アプリでログインを保護します。回復コードは安全な場所に保存してください。</p><label>現在のパスワード<input name="password" type="password" maxlength="128" autocomplete="current-password" required></label><button>設定キーを表示</button></form>
+                <div id="mfa-enrollment" hidden><p>認証アプリでアカウントを追加し、「設定キーを入力」を選んでください。</p><output id="mfa-secret"></output><form id="mfa-enable-form" class="stack"><label>認証アプリの6桁のコード<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label><button>二段階認証を有効にする</button></form></div>
+                <div id="mfa-recovery" hidden><h3>回復コード — 一度だけ表示されます</h3><p>各コードは1回だけ使えます。認証アプリを紛失したときのために、パスワードとは別の安全な場所に保存してください。</p><pre id="mfa-recovery-codes"></pre><button type="button" id="mfa-hide-codes" class="secondary">保存しました・非表示にする</button></div>
+                <form id="staff-password-form" class="stack"><h2>パスワードの変更</h2><label>現在のパスワード<input name="currentPassword" type="password" maxlength="128" autocomplete="current-password" required></label><label>新しいパスワード（15〜64文字）<input name="password" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label><button>変更して全端末からログアウト</button></form>
+                <button id="staff-logout-all" type="button" class="secondary">すべての端末からログアウト</button>
+            </details>
             <details class="panel reset-panel"><summary>生徒のパスワード再設定</summary>
                 <form id="reset-code-form" class="stack">
                     <label>本人確認済みの生徒のユーザー名<input name="username" minlength="4" maxlength="32" required></label>
