@@ -50,3 +50,5 @@ Back up the database and SESSION_SECRET through separate protected processes. A 
 - CI is scheduled weekly as well as on main pushes and pull requests. Action implementations and the Docker base image are pinned. The container scan runs without uploading the container to a registry; scan findings are published to the repository's security interface.
 - MFA enrollment remains skipped at the owner's request. Existing passwords and authenticator settings were not changed.
 - A local MySQL client can no longer reach the cloud database unless its source network is deliberately added by an authorized operator. Local MAMP/XAMPP databases are unaffected. Never restore all-public access just for convenience.
+
+The container uses separate dependency-installation and runtime stages. npm, npx, Yarn, and Corepack are excluded from the final image. CI also smoke-tests runtime dependencies as a non-root user with a read-only filesystem, dropped capabilities, and no privilege escalation. This smoke test does not replace an end-to-end container deployment test with a production-like database.
