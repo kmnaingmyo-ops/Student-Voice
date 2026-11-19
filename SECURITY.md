@@ -40,7 +40,7 @@ Legacy student accounts remain accessible until individually migrated; old short
 
 Run npm ci, npm run check, npm test, and npm audit --omit=dev. CI configuration must run successfully on GitHub before it is treated as an enforced control. Use branch protection after the checks are available; this file does not enable repository settings.
 
-Back up the database and SESSION_SECRET through separate protected processes. A lost encryption secret makes saved authenticator keys unrecoverable. Restrict database roles; the bootstrap currently needs CREATE TABLE privileges. For enterprise operation, run migrations separately and give the runtime only required data privileges.
+Back up the database and SESSION_SECRET through separate protected processes. A lost encryption secret makes saved authenticator keys unrecoverable. `DB_AUTO_MIGRATE=false` disables schema changes and administrator bootstrap in web startup. Run `npm run db:migrate` with separate private operator settings first, then grant the web account only `runtime-permissions.sql`. Default/local bootstrap remains compatible. Production account activation is a separate administrator step; shipping the SQL alone does not change live privileges. See OPERATIONS.md.
 
 
 ## Additional free protections (2026-11-19)
@@ -80,3 +80,9 @@ TiDB Cloud Starter's existing daily backup was checked in the console: the 2026-
 ### If a credential is exposed
 
 Revoke/rotate the affected provider credential privately, update the relevant hosting setting, and redeploy. Review security logs and GitHub secret alerts. Do not paste credentials into chat or commit them. Treat SESSION_SECRET separately: its rotation invalidates stored authenticator encryption and needs planned re-enrollment. Account and device MFA remain manual owner/IT tasks.
+
+## Tested recovery and runtime separation
+
+The maintenance CLI provides authenticated encrypted database snapshots and restoration only into an empty, separately named recovery database. Automated tests restore fictional data and media, reject tampering/wrong keys and unsafe targets, and exclude saved sessions. No production backup has been exported by these tests. Retention and protected storage are still operator responsibilities; the free TiDB backup configuration is unchanged.
+
+Access-control integration tests now run the web app using the restricted runtime grants, with automatic migrations disabled. CREATE, ALTER, and DROP are explicitly denied while authenticated controls and session storage work. This verifies the supplied grants locally/in CI; actual cloud privilege separation is not complete until an administrator creates the restricted account and switches Render's private credentials. Operator settings and .svbackup files are excluded from Git and Docker build context.
