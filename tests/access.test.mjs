@@ -129,18 +129,18 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await change('/staff/change-password', { currentPassword: password, password: 'a new unique teacher testing passphrase' })).status, 200);
         assert.equal((await recovery('/staff/suggestions')).status, 401);
         assert.equal((await recovery(privateImage)).status, 404);
-        const [{ insertId: studentId }] = await connection.execute('INSERT INTO students (username, password_hash) VALUES (?, ?)', ['studentfixture', await hashPassword('1234')]);
+        const [{ insertId: studentId }] = await connection.execute('INSERT INTO students (username, password_hash) VALUES (?, ?)', ['studentfixture', await hashPassword('violet rivers under starlight')]);
         const studentA = client(), studentB = client();
         for (const student of [studentA, studentB]) {
             await student('/session');
-            assert.equal((await student('/student/login', { username: 'studentfixture', password: '1234' })).status, 200);
+            assert.equal((await student('/student/login', { username: 'studentfixture', password: 'violet rivers under starlight' })).status, 200);
         }
         // Attempt to cross account boundaries using otherwise valid signed-in sessions.
-        const [{ insertId: otherId }] = await connection.execute('INSERT INTO students (username, password_hash) VALUES (?, ?)', ['otherfixture', await hashPassword('5678')]);
+        const [{ insertId: otherId }] = await connection.execute('INSERT INTO students (username, password_hash) VALUES (?, ?)', ['otherfixture', await hashPassword('copper mountains after rainfall')]);
         const other = client(), guest = client(), moderator = client();
         await other('/session');
         await guest('/session');
-        assert.equal((await other('/student/login', { username: 'otherfixture', password: '5678' })).status, 200);
+        assert.equal((await other('/student/login', { username: 'otherfixture', password: 'copper mountains after rainfall' })).status, 200);
         assert.equal((await studentA('/profile', { display_name: 'Owner fixture', bio: 'Fictional bio', student_id: otherId, username: 'forged' })).status, 200);
         const [[untouched]] = await connection.execute('SELECT display_name FROM students WHERE id = ?', [otherId]);
         assert.equal(untouched.display_name, '');
@@ -208,6 +208,55 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await other('/profile/avatar')).status, 404);
         assert.equal((await studentA('/student/logout-all', {})).status, 200);
         assert.equal((await studentB('/profile')).status, 401);
+        // Weak legacy passwords prove identity only; they never grant posting access.
+        await connection.query('DELETE FROM security_limits');
+        const [{ insertId: legacyId }] = await connection.execute('INSERT INTO students (username, password_hash, display_name, bio) VALUES (?, ?, ?, ?)', ['legacyfixture', await hashPassword('1234'), 'Keep my name', 'Keep my profile']);
+        const [{ insertId: legacyPost }] = await connection.execute('INSERT INTO suggestions (student_id, title, category, body) VALUES (?, ?, ?, ?)', [legacyId, 'Keep my article', '授業', 'Fictional legacy article']);
+        const upgrade = client(), rival = client(), outsider = client();
+        for (const c of [upgrade, rival, outsider]) await c('/session');
+        assert.equal((await outsider('/student/upgrade-password', { password: 'a beautiful afternoon in spring' })).status, 401);
+        for (const c of [upgrade, rival]) {
+            const result = await c('/student/login', { username: 'legacyfixture', password: '1234' });
+            assert.equal(result.body.passwordUpgradeRequired, true);
+            assert.equal((await c('/session')).body.student, false);
+            assert.equal((await c('/profile')).status, 401);
+        }
+        const expired = client();
+        await expired('/session');
+        await expired('/student/login', { username: 'legacyfixture', password: '1234' });
+        const { seal, unseal } = await import('../security.js');
+        const [challengeRows] = await connection.query('SELECT id, data FROM app_sessions');
+        for (const row of challengeRows) {
+            const value = unseal(row.data, row.id.toString());
+            if (value.studentUpgrade?.id !== legacyId) continue;
+            value.studentUpgrade.at = Date.now() - 300001;
+            await connection.execute('UPDATE app_sessions SET data = ? WHERE id = ?', [seal(value, row.id.toString()), row.id]);
+        }
+        assert.equal((await expired('/student/upgrade-password', { password: 'a beautiful afternoon in spring' })).status, 401);
+        // Restart the other two challenges after the deliberate expiry fixture.
+        for (const c of [upgrade, rival]) await c('/student/login', { username: 'legacyfixture', password: '1234' });
+        await connection.query('DELETE FROM security_limits');
+        const newPassword = 'a beautiful afternoon in spring';
+        const fields = { password: newPassword, password_confirmation: newPassword };
+        assert.equal((await upgrade('/student/upgrade-password', fields, true)).status, 403);
+        assert.equal((await upgrade('/student/upgrade-password', { password: '1234', password_confirmation: '1234' })).status, 400);
+        assert.equal((await upgrade('/student/upgrade-password', { ...fields, password_confirmation: 'different' })).status, 400);
+        assert.equal((await upgrade('/student/upgrade-password', fields)).status, 200);
+        const [[preserved]] = await connection.execute('SELECT display_name, bio, password_version FROM students WHERE id = ?', [legacyId]);
+        assert.equal(preserved.display_name, 'Keep my name');
+        assert.equal(preserved.bio, 'Keep my profile');
+        assert.equal(preserved.password_version, 2);
+        const [[owned]] = await connection.execute('SELECT student_id FROM suggestions WHERE id = ?', [legacyPost]);
+        assert.equal(owned.student_id, legacyId);
+        assert.equal((await upgrade('/profile')).status, 200);
+        assert.equal((await upgrade('/student/upgrade-password', fields)).status, 401, 'challenge is single use');
+        assert.equal((await rival('/student/upgrade-password', fields)).status, 401, 'concurrent stale challenge cannot overwrite a new password');
+        assert.equal((await outsider('/student/login', { username: 'legacyfixture', password: '1234' })).status, 401);
+        const relogin = await outsider('/student/login', { username: 'legacyfixture', password: newPassword });
+        assert.equal(relogin.status, 200);
+        assert.equal(relogin.body.passwordUpgradeRequired, undefined);
+        assert.equal((await outsider('/profile')).status, 200);
+        await connection.query('DELETE FROM security_limits');
         const { DatabaseRateStore, DatabaseSessionStore } = await import('../security.js');
         const limitA = new DatabaseRateStore('test'), limitB = new DatabaseRateStore('test');
         limitA.init({ windowMs: 60000 }); limitB.init({ windowMs: 60000 });
