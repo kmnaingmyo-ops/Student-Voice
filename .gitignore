@@ -11,6 +11,7 @@ operator.env.*
 !operator.env.example
 backups/
 *.svbackup
+sbom.cdx.json
 
 # Keep the original 8K intro local. The browser uses the included fallback.
 public/assets/student-hero-8k.mp4
