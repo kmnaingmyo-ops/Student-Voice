@@ -6,7 +6,7 @@ A Japanese student blog built with Node.js, Express, MySQL, HTML, CSS, and JavaS
 
 https://student-voice-p2mf.onrender.com/
 
-Hosted on the free Render web service with a MySQL-compatible TiDB Cloud Starter database and a $0 spending limit. Free hosting may take about a minute to wake after inactivity. Uploaded images are stored in the database on this deployment so they survive restarts. Current in-memory login sessions are cleared when the server restarts. The GitHub copy includes the smaller intro video; the original 8K clip stays local.
+Hosted on the free Render web service with a MySQL-compatible TiDB Cloud Starter database and a $0 spending limit. Free hosting may take about a minute to wake after inactivity. Uploaded images are stored in the database on this deployment so they survive restarts. Login sessions and rate-limit counters are stored in the database and survive server restarts. The GitHub copy includes the smaller intro video; the original 8K clip stays local.
 
 ## Put this project on GitHub
 
@@ -18,7 +18,7 @@ From a new clone, follow the fresh MAMP installation steps below. Keep package-l
 
 ## Customize the homepage video
 
-The red, white, and charcoal interface has a full-width homepage video area. Put your selected MP4 at public/assets/student-hero.mp4 and refresh the page. The supplied academic video is included as public/assets/student-hero.mp4. See CAMPUS-FILM.md for details.
+The navy and white interface has a full-width homepage video area. Put your selected MP4 at public/assets/student-hero.mp4 and refresh the page. The supplied academic video is included as public/assets/student-hero.mp4. See CAMPUS-FILM.md for details.
 
 ## Update your existing project
 
@@ -172,3 +172,7 @@ New students register with an email address and a 15–64 character password. Co
 Set FIREBASE_WEB_API_KEY in the server environment using the Web API key from your Firebase project. Enable Email/Password authentication and a required minimum password length of 15 in Firebase Authentication settings. Keep the Spark (free) plan. New local installations use database.sql; existing local installations import upgrade-email.sql once. Cloud startup adds the new columns without replacing account IDs or posts.
 
 Existing username accounts continue to sign in using the same login field. They are not falsely marked as email-verified. Their teacher-issued recovery codes remain under the recovery page's legacy-account section. Firebase email accounts use email reset links instead. Email passwords are handled by Firebase; a random unusable local password hash prevents username sign-in from bypassing Firebase verification. Public comments continue to use an internal alias, never the student's email address.
+
+## Additional security controls
+
+See [SECURITY.md](SECURITY.md) for teacher authenticator setup, recovery codes, session revocation, audit logging, CI checks, container guidance, and external services still needed for enterprise use. Existing teachers should enroll MFA and replace short legacy passwords themselves. No school SSO, WAF, SIEM, or endpoint agent is claimed to be active.

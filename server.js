@@ -2,7 +2,7 @@ import { registerEmailAuth, verifiedFirebaseUser, passwordProblem } from './emai
 import express from 'express';
 import { resolve } from 'node:path';
 import session from 'express-session';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db } from './database.js';
@@ -10,6 +10,7 @@ import { verifyPassword, hashPassword } from './password.js';
 import { uploadImage, saveImage, removeImage } from './media.js';
 import { registerSocialRoutes } from './social.js';
 import { registerProfileRoutes } from './profile.js';
+import { initSecurity, DatabaseSessionStore, DatabaseRateStore, securityLogging, requireStaff, staffSecurity, startStaffSession, registerSecurityRoutes, fingerprint } from './security.js';
 
 const secret = process.env.SESSION_SECRET || '';
 if (secret.length < 32 || secret.startsWith('CHANGE_')) {
@@ -19,6 +20,7 @@ if (secret.length < 32 || secret.startsWith('CHANGE_')) {
 export const app = express();
 const categories = ['授業', '学校生活', '設備', 'その他'];
 const dummyHash = await hashPassword(randomBytes(32).toString('hex'));
+await initSecurity();
 
 app.disable('x-powered-by');
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
@@ -28,19 +30,23 @@ app.use((req, res, next) => {
         'X-Content-Type-Options': 'nosniff',
         'Cache-Control': 'no-store',
         'Referrer-Policy': 'no-referrer',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+        'X-Frame-Options': 'DENY',
+        ...(process.env.NODE_ENV === 'production' ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}),
     });
     next();
 });
 app.use(express.static(fileURLToPath(new URL('./public', import.meta.url))));
 app.use(express.json({ limit: '32kb' }));
-// Memory sessions are suitable for this local, single-process classroom app.
 app.use(session({
+    store: new DatabaseSessionStore(),
     name: 'student_voice_sid',
     secret,
     resave: false,
     saveUninitialized: false,
     cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'strict', maxAge: 60 * 60 * 1000 },
 }));
+app.use(securityLogging);
 
 app.use('/api', (req, res, next) => {
     req.session.csrf ??= randomBytes(32).toString('hex');
@@ -55,18 +61,20 @@ app.use('/api', (req, res, next) => {
     next();
 });
 
-function requireStaff(req, res, next) {
-    if (!req.session.staffId) {
-        return res.status(401).json({ error: '先生用ログインが必要です。' });
-    }
-    next();
-}
-
 const limitMessage = { error: '少し待ってから、もう一度お試しください。' };
-const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, message: limitMessage });
-const postLimit = rateLimit({ windowMs: 60 * 1000, limit: 5, message: limitMessage });
-const resetLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, message: limitMessage });
-const socialLimit = rateLimit({ windowMs: 60 * 1000, limit: 40, message: limitMessage });
+const limiter = (prefix, windowMs, limit, extra = {}) => rateLimit({ windowMs, limit, message: limitMessage, store: new DatabaseRateStore(prefix), standardHeaders: 'draft-8', legacyHeaders: false, ...extra });
+const loginLimit = limiter('login', 15 * 60 * 1000, 10);
+const postLimit = limiter('post', 60 * 1000, 5);
+const resetLimit = limiter('reset', 15 * 60 * 1000, 5);
+const socialLimit = limiter('social', 60 * 1000, 40);
+const mfaLimit = limiter('mfa-account', 15 * 60 * 1000, 5, { keyGenerator: req => String(req.session.staffChallenge?.id || 'guest') });
+app.use('/api', limiter('api', 60 * 1000, 180));
+app.use(['/api/login', '/api/student/login', '/api/student/email-login', '/api/student/request-password-reset'],
+    limiter('auth-account', 15 * 60 * 1000, 20, { keyGenerator: req => {
+        const identity = req.body?.email || req.body?.username;
+        return fingerprint(typeof identity === 'string' ? identity.trim().toLowerCase().slice(0, 254) : ipKeyGenerator(req.ip));
+    } }));
+registerSecurityRoutes(app, loginLimit, mfaLimit);
 
 async function requireStudent(req, res, next) {
     const [rows] = await db.execute('SELECT password_version FROM students WHERE id = ?', [req.session.studentId || 0]);
@@ -154,6 +162,11 @@ app.post('/api/staff/reset-code', requireStaff, loginLimit, async (req, res) => 
 });
 
 app.get('/api/session', async (req, res) => {
+    if (req.session.staffId) {
+        const row = await staffSecurity(req.session.staffId);
+        if (!row || req.session.staffPasswordTag !== fingerprint(row.password_hash) || req.session.staffEpoch !== Number(row.epoch)
+            || (row.secret_cipher && !req.session.staffMfa) || Date.now() - (req.session.staffAuthenticatedAt || 0) > 3600000) delete req.session.staffId;
+    }
     if (req.session.studentId) {
         const [rows] = await db.execute('SELECT password_version FROM students WHERE id = ?', [req.session.studentId]);
         if (!rows.length || rows[0].password_version !== req.session.passwordVersion) {
@@ -211,15 +224,14 @@ app.post('/api/login', loginLimit, async (req, res, next) => {
     if (!valid) {
         return res.status(401).json({ error: 'ユーザー名またはパスワードを確認してください。' });
     }
-    req.session.regenerate(error => {
-        if (error) return next(error);
-        req.session.staffId = rows[0].id;
+    const security = await staffSecurity(rows[0].id);
+    if (security.secret_cipher) {
+        await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
+        req.session.staffChallenge = { id: rows[0].id, at: Date.now(), passwordTag: fingerprint(security.password_hash), epoch: Number(security.epoch), strongPassword: !passwordProblem(password) };
         req.session.csrf = randomBytes(32).toString('hex');
-        req.session.save(error => {
-            if (error) return next(error);
-            res.json({ csrf: req.session.csrf });
-        });
-    });
+        return res.json({ mfaRequired: true, csrf: req.session.csrf });
+    }
+    await startStaffSession(req, res, rows[0].id, false, !passwordProblem(password));
 });
 
 app.get('/api/staff/suggestions', requireStaff, async (req, res) => {
@@ -246,6 +258,12 @@ app.post('/api/logout', (req, res, next) => {
         res.clearCookie('student_voice_sid');
         res.json({ message: 'ログアウトしました。' });
     });
+});
+
+app.post('/api/student/logout-all', requireStudent, async (req, res) => {
+    await db.execute('UPDATE students SET password_version = password_version + 1 WHERE id = ?', [req.session.studentId]);
+    req.session.destroy(() => {});
+    res.json({ message: 'すべての端末からログアウトしました。' });
 });
 
 registerSocialRoutes(app, requireStudent, requireStaff, socialLimit);

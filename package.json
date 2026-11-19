@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node --env-file=.env server.js",
     "create-staff": "node --env-file=.env scripts/create-staff.js",
-    "check": "node --check server.js && node --check email-auth.js && node --check public/app.js && node --check media.js && node --check social.js && node --check profile.js && node --check scripts/create-staff.js && node --check public/cinema.js && node --check public/navigation.js"
+    "check": "node --check server.js && node --check email-auth.js && node --check public/app.js && node --check media.js && node --check social.js && node --check profile.js && node --check scripts/create-staff.js && node --check public/cinema.js && node --check public/navigation.js && node --check security.js && node --check public/security-ui.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -17,6 +18,7 @@
     "express-session": "^1.18.2",
     "multer": "^2.5.0",
     "mysql2": "^3.15.0",
+    "otpauth": "^9.6.0",
     "sharp": "^0.35.5"
   }
 }

@@ -86,7 +86,7 @@ export function registerEmailAuth(app, limit, startSession) {
         try { account = await firebaseRequest('signUp', { email, password, returnSecureToken: true }); }
         catch (error) {
             if (error.code !== 'EMAIL_EXISTS') throw error;
-            return res.json({ needsVerification: true, message: '登録済みの場合はログインしてください。未確認の場合は確認メールを再送できます。' });
+            return res.json({ needsVerification: true, message: genericEmail + ' リンクを開いた後、ログインしてください。' });
         }
         await firebaseRequest('sendOobCode', { requestType: 'VERIFY_EMAIL', idToken: account.idToken });
         // Never create an authenticated session before inbox ownership is verified.
