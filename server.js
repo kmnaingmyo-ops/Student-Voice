@@ -13,7 +13,7 @@ import { registerProfileRoutes } from './profile.js';
 import { initSecurity, DatabaseSessionStore, DatabaseRateStore, securityLogging, requireStaff, staffSecurity, startStaffSession, registerSecurityRoutes, fingerprint } from './security.js';
 
 const secret = process.env.SESSION_SECRET || '';
-if (secret.length < 32 || secret.startsWith('CHANGE_')) {
+if (secret.length < 32 || /^(CHANGE_|replace-|example)/i.test(secret) || /^(.)\1+$/.test(secret)) {
     throw new Error('Set a random SESSION_SECRET of at least 32 characters in .env.');
 }
 
