@@ -22,7 +22,7 @@ This is a school project with additional security controls, not a certified ente
 
 MFA is enforced for an enrolled teacher, but enrollment is not silently enabled: a person must control the authenticator and save recovery codes. There is no password-only MFA bypass or disable endpoint. If both the app and recovery codes are lost, recovery requires an authorized database operator after independently verifying identity. Do not remove MFA on an unverified request.
 
-Legacy student accounts remain accessible until individually migrated; old short passwords have not been silently reset. New Firebase accounts require email verification and the current password policy. Verify Firebase email enumeration protection in the console. Application signup/reset responses avoid revealing account existence, but this alone does not prove provider configuration.
+Legacy student accounts remain accessible until individually migrated; old short passwords have not been silently reset. New Firebase accounts require email verification and the current password policy. Firebase email enumeration protection was confirmed enabled in Authentication > Settings > User actions on 2026-11-19. Its password policy was also confirmed set to Require enforcement with a 15-character minimum and 64-character maximum. Application signup/reset responses avoid revealing account existence. Verified email proves inbox access, not school membership.
 
 ## External work still required for enterprise use
 
@@ -52,3 +52,31 @@ Back up the database and SESSION_SECRET through separate protected processes. A 
 - A local MySQL client can no longer reach the cloud database unless its source network is deliberately added by an authorized operator. Local MAMP/XAMPP databases are unaffected. Never restore all-public access just for convenience.
 
 The container uses separate dependency-installation and runtime stages. npm, npx, Yarn, and Corepack are excluded from the final image. CI also smoke-tests runtime dependencies as a non-root user with a read-only filesystem, dropped capabilities, and no privilege escalation. This smoke test does not replace an end-to-end container deployment test with a production-like database.
+
+## Live checks and recovery (2026-11-19)
+
+The main branch is protected: pull requests, up-to-date passing check/codeql/container-scan jobs, and resolved conversations are required, including for administrators. Force pushes and deletion are not allowed. A separate reviewer is not required for this single-owner project.
+
+Run `node check-live.mjs` with Node.js 22 or newer to check the public deployed site. No packages, passwords, or database credentials are needed. The separate Live security check workflow runs daily at approximately 08:35 Japan time and can be started manually in GitHub Actions. Scheduled GitHub jobs can be delayed or disabled by GitHub after repository inactivity; this is not continuous uptime monitoring. Review failed workflow runs and configure your own GitHub notification preferences.
+
+The check tests security headers, HTTPS-only session cookie attributes, guest sessions, public article/database availability, rejection of guest administrator requests, rejection of guest article submission, and rejection of requests missing CSRF tokens. It sends eight requests, creates no student accounts or articles, and prints neither article content nor session tokens. Denied requests deliberately appear in security logs. The temporary guest session expires after one hour. This does not test real inbox delivery, authenticated ownership rules, MFA enrollment, restore correctness, or attacks against Firebase directly. Local database integration tests cover additional authenticated controls.
+
+TiDB Cloud Starter's existing daily backup was checked in the console: the 2026-11-18 17:00 UTC backup succeeded and expires 2026-11-19 17:00 UTC. Backup settings show a daily 17:00 UTC cycle and **one-day retention** at the current $0 spending limit. Longer retention requires changing spending settings; no paid settings were enabled. A backup existing is not proof of a tested restore.
+
+### If the website stops working
+
+1. Check the latest Live security check and Render deployment logs. Keep response bodies, passwords, tokens, and student records out of public issues.
+2. For a code regression, revert through a pull request with passing checks, then deploy the corrected commit. If urgent, use Render's existing rollback to a known good deployment while preparing the source revert. Database changes may need separate recovery; a code rollback does not reverse them.
+3. If the database connection fails, compare Render's current outbound ranges with TiDB's allowlist, check TLS, and review database service status. Keep the database restricted; do not restore all-public access.
+
+### If school data is deleted or damaged
+
+1. Stop additional writes and contact the project owner immediately. The current one-day backup window is short; wait times can cause the last useful backup to expire.
+2. In TiDB's Data > Backup screen, identify a successful backup from before the incident. Review the restore target and provider warnings before submitting any restore. Prefer a separate recovery target; do not overwrite production as a first experiment. A target or feature that requires payment needs an explicit budget decision.
+3. Keep the original database and current application secret available privately. Validate article counts, images, profiles, moderation states, and permissions against the recovery target before switching the app. Do not publish database exports in GitHub or attach them to Actions artifacts.
+4. Database backups contain password hashes and encrypted MFA keys but do not back up Firebase accounts, Render environment settings, or the SESSION_SECRET. Preserve the secret separately in a protected password manager. Do not rotate it during recovery without a migration plan.
+5. After a restore, invalidate restored application sessions and verify student/teacher access. An independently tested restore and longer encrypted retention remain required for enterprise use; neither has been claimed here.
+
+### If a credential is exposed
+
+Revoke/rotate the affected provider credential privately, update the relevant hosting setting, and redeploy. Review security logs and GitHub secret alerts. Do not paste credentials into chat or commit them. Treat SESSION_SECRET separately: its rotation invalidates stored authenticator encryption and needs planned re-enrollment. Account and device MFA remain manual owner/IT tasks.
