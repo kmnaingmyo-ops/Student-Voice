@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 node_modules
+operator.env
+operator.env.*
+backups
+*.svbackup
 uploads
 *.log
 public/assets/student-hero-8k.mp4

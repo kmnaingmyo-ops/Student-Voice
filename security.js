@@ -26,10 +26,12 @@ export function unseal(value, purpose) {
 }
 
 export async function initSecurity() {
-    await db.query('CREATE TABLE IF NOT EXISTS app_sessions (id VARBINARY(64) PRIMARY KEY, data MEDIUMTEXT NOT NULL, expires_at BIGINT NOT NULL, INDEX (expires_at))');
-    await db.query('CREATE TABLE IF NOT EXISTS security_limits (id VARBINARY(64) PRIMARY KEY, hits INT UNSIGNED NOT NULL, reset_at BIGINT NOT NULL, INDEX (reset_at))');
-    await db.query('CREATE TABLE IF NOT EXISTS staff_security (staff_id INT UNSIGNED PRIMARY KEY, secret_cipher TEXT NULL, last_step BIGINT NOT NULL DEFAULT -1, recovery_hashes TEXT NULL, epoch INT UNSIGNED NOT NULL DEFAULT 1)');
-    await db.query('CREATE TABLE IF NOT EXISTS security_events (id CHAR(36) PRIMARY KEY, occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, event VARCHAR(64) NOT NULL, actor VARCHAR(64) NOT NULL, request_id CHAR(36) NOT NULL, status SMALLINT NOT NULL, INDEX (occurred_at))');
+    if (process.env.DB_AUTO_MIGRATE !== 'false') {
+        await db.query('CREATE TABLE IF NOT EXISTS app_sessions (id VARBINARY(64) PRIMARY KEY, data MEDIUMTEXT NOT NULL, expires_at BIGINT NOT NULL, INDEX (expires_at))');
+        await db.query('CREATE TABLE IF NOT EXISTS security_limits (id VARBINARY(64) PRIMARY KEY, hits INT UNSIGNED NOT NULL, reset_at BIGINT NOT NULL, INDEX (reset_at))');
+        await db.query('CREATE TABLE IF NOT EXISTS staff_security (staff_id INT UNSIGNED PRIMARY KEY, secret_cipher TEXT NULL, last_step BIGINT NOT NULL DEFAULT -1, recovery_hashes TEXT NULL, epoch INT UNSIGNED NOT NULL DEFAULT 1)');
+        await db.query('CREATE TABLE IF NOT EXISTS security_events (id CHAR(36) PRIMARY KEY, occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, event VARCHAR(64) NOT NULL, actor VARCHAR(64) NOT NULL, request_id CHAR(36) NOT NULL, status SMALLINT NOT NULL, INDEX (occurred_at))');
+    }
     // Bounded retention; repeat without relying on a single instance's timers.
     await cleanupSecurity();
 }
