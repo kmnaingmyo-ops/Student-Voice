@@ -10,7 +10,7 @@ import { verifyPassword, hashPassword } from './password.js';
 import { uploadImage, saveImage, removeImage } from './media.js';
 import { registerSocialRoutes } from './social.js';
 import { registerProfileRoutes } from './profile.js';
-import { initSecurity, DatabaseSessionStore, DatabaseRateStore, securityLogging, requireStaff, staffSecurity, startStaffSession, registerSecurityRoutes, fingerprint } from './security.js';
+import { initSecurity, DatabaseSessionStore, DatabaseRateStore, securityLogging, requireStaff, hasStaffSession, staffSecurity, startStaffSession, registerSecurityRoutes, fingerprint } from './security.js';
 
 const secret = process.env.SESSION_SECRET || '';
 if (secret.length < 32 || /^(CHANGE_|replace-|example)/i.test(secret) || /^(.)\1+$/.test(secret)) {
@@ -162,11 +162,7 @@ app.post('/api/staff/reset-code', requireStaff, loginLimit, async (req, res) => 
 });
 
 app.get('/api/session', async (req, res) => {
-    if (req.session.staffId) {
-        const row = await staffSecurity(req.session.staffId);
-        if (!row || req.session.staffPasswordTag !== fingerprint(row.password_hash) || req.session.staffEpoch !== Number(row.epoch)
-            || (row.secret_cipher && !req.session.staffMfa) || Date.now() - (req.session.staffAuthenticatedAt || 0) > 3600000) delete req.session.staffId;
-    }
+    if (req.session.staffId && !await hasStaffSession(req)) delete req.session.staffId;
     if (req.session.studentId) {
         const [rows] = await db.execute('SELECT password_version FROM students WHERE id = ?', [req.session.studentId]);
         if (!rows.length || rows[0].password_version !== req.session.passwordVersion) {

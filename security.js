@@ -106,15 +106,16 @@ export async function staffSecurity(id) {
     const [[row]] = await db.execute('SELECT s.password_hash, ss.secret_cipher, ss.last_step, ss.recovery_hashes, COALESCE(ss.epoch, 1) AS epoch FROM staff s LEFT JOIN staff_security ss ON ss.staff_id = s.id WHERE s.id = ?', [id]);
     return row;
 }
-export async function requireStaff(req, res, next) {
-    if (!req.session.staffId || !req.session.staffAuthenticatedAt || Date.now() - req.session.staffAuthenticatedAt > 3600000) {
-        return res.status(401).json({ error: '管理者ログインが必要です。' });
-    }
+// Reuse the complete session check wherever private teacher content is served.
+export async function hasStaffSession(req) {
+    if (!req.session?.staffId || !Number.isSafeInteger(req.session.staffAuthenticatedAt)
+        || Date.now() - req.session.staffAuthenticatedAt > 3600000) return false;
     const row = await staffSecurity(req.session.staffId);
-    if (!row || fingerprint(row.password_hash) !== req.session.staffPasswordTag || Number(row.epoch) !== req.session.staffEpoch
-        || (row.secret_cipher && !req.session.staffMfa)) {
-        return res.status(401).json({ error: 'もう一度ログインしてください。' });
-    }
+    return Boolean(row && fingerprint(row.password_hash) === req.session.staffPasswordTag
+        && Number(row.epoch) === req.session.staffEpoch && (!row.secret_cipher || req.session.staffMfa));
+}
+export async function requireStaff(req, res, next) {
+    if (!await hasStaffSession(req)) return res.status(401).json({ error: '管理者アカウントでログインしてください。' });
     next();
 }
 export async function startStaffSession(req, res, id, mfa = false, strongPassword = false) {

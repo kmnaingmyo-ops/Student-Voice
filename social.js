@@ -1,5 +1,6 @@
 import { db } from './database.js';
 import { sendImage } from './media.js';
+import { hasStaffSession } from './security.js';
 
 const reactionKinds = ['like', 'love', 'haha', 'wow', 'sad', 'care'];
 
@@ -39,7 +40,7 @@ export function registerSocialRoutes(app, requireStudent, requireStaff, socialLi
         const id = postId(req.params.id);
         const [rows] = await db.execute('SELECT image_name, status FROM suggestions WHERE id = ?', [id]);
         const post = rows[0];
-        if (!post || (post.status !== 'published' && !req.session.staffId)
+        if (!post || (post.status !== 'published' && !await hasStaffSession(req))
             || !/^[a-f0-9]{32}\.webp$/.test(post.image_name || '')) {
             return res.status(404).end();
         }
