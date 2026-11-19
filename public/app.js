@@ -291,6 +291,9 @@ async function navigate() {
     // Clear previously displayed private data before requesting the current session.
     document.querySelector('#staff-posts').replaceChildren();
     document.querySelector('#staff-comments').replaceChildren();
+    document.querySelector('#security-monitor-summary').textContent = '';
+    document.querySelector('#security-monitor-events').replaceChildren();
+    document.querySelector('#security-monitor').open = false;
     document.querySelector('#reset-code').textContent = '';
     document.querySelector('#mfa-secret').textContent = '';
     document.querySelector('#mfa-recovery-codes').textContent = '';

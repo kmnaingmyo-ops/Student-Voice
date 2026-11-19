@@ -244,6 +244,7 @@
                 <form id="staff-password-form" class="stack"><h2>パスワードの変更</h2><label>現在のパスワード<input name="currentPassword" type="password" maxlength="128" autocomplete="current-password" required></label><label>新しいパスワード（15〜64文字）<input name="password" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label><button>変更して全端末からログアウト</button></form>
                 <button id="staff-logout-all" type="button" class="secondary">すべての端末からログアウト</button>
             </details>
+            <details id="security-monitor" class="panel"><summary>セキュリティの記録</summary><p>過去24時間の集計と最新50件の操作記録。記録は30日間保存します。</p><button type="button" id="security-refresh" class="secondary">記録を更新</button><p id="security-monitor-summary" role="status"></p><div id="security-monitor-events" class="security-event-list"></div></details>
             <details class="panel reset-panel"><summary>生徒のパスワード再設定</summary>
                 <form id="reset-code-form" class="stack">
                     <label>本人確認済みの生徒のユーザー名<input name="username" minlength="4" maxlength="32" required></label>
