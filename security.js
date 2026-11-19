@@ -136,6 +136,11 @@ export function otpStep(secret, token, timestamp = Date.now()) {
 }
 
 export function registerSecurityRoutes(app, authLimit, mfaLimit) {
+    app.get('/api/staff/security-events', requireStaff, async (req, res) => {
+        const [[summary]] = await db.query('SELECT COUNT(*) AS total, COALESCE(SUM(status IN (401, 403)), 0) AS denied, COALESCE(SUM(status = 429), 0) AS limited, COALESCE(SUM(status >= 500), 0) AS errors FROM security_events WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)');
+        const [events] = await db.query('SELECT occurred_at, event, actor, request_id, status FROM security_events ORDER BY occurred_at DESC, id DESC LIMIT 50');
+        res.json({ summary, events, retentionDays: 30 });
+    });
     app.post('/api/staff/mfa-login', authLimit, mfaLimit, async (req, res) => {
         const challenge = req.session.staffChallenge;
         const code = req.body?.code;

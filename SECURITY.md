@@ -28,10 +28,10 @@ Legacy student accounts remain accessible until individually migrated; old short
 
 - Identity / SSO: choose the school's identity provider and approved domains, configure tenant membership and provisioning/deprovisioning. Verified email alone is not school membership. This app is currently single-school, not a multi-tenant system.
 - MFA / passwordless: enroll teachers now. School-wide passkeys or identity-provider MFA require provider configuration; TOTP is not phishing-resistant.
-- Network: put a managed WAF/DDoS service in front, restrict the database to approved network paths, and review proxy trust. No WAF or private networking has been provisioned here.
+- Network: the deployed TiDB public endpoint is limited to Render shared outbound ranges 74.220.49.0/24 and 74.220.57.0/24 (checked 2026-11-19). All-public access was replaced. These ranges are shared with other Render services, so TLS and database credentials are still required. No dedicated IP, WAF, or private networking has been provisioned. Re-check the Render Connect panel before changing regions or services.
 - Secrets: move credentials into the organization's managed secret vault and separate migration credentials from runtime credentials. Existing Render environment settings remain in use; no passwords were rotated automatically.
 - Cloud: enforce administrator MFA on GitHub/Render/TiDB/Firebase, least-privilege service identities, separate staging and production, and tested encrypted backups with retention and restore objectives. Do not put database exports in this public repository.
-- Containers: run the supplied image with a read-only root filesystem, dropped capabilities, and resource limits when compatible with database media storage. Scan the built image and pin a reviewed base-image digest before enterprise release. Docker has not replaced Render's runtime automatically.
+- Containers: the base image and CI actions are pinned to reviewed digests/commit SHAs. CI scans the built image with Grype and blocks fixable high/critical findings; lower-severity and unfixed findings still need regular review. Render still uses the Node runtime. Enterprise container operation additionally needs a read-only filesystem, dropped capabilities, and resource limits.
 - Monitoring / SIEM: configure a restricted log drain to your chosen SIEM, alerts for repeated 401/403/429/503 responses and privileged actions, and an incident-response owner. Structured logs are ready; no external SIEM is connected.
 - Endpoint: IT must manage staff devices using disk encryption, automatic updates, endpoint detection, and browser policies. Website code cannot enforce device protection by itself.
 - Governance: independent access-control testing, penetration testing, privacy review, retention/deletion processes, breach response, and operational ownership are required before enterprise adoption.
@@ -41,3 +41,12 @@ Legacy student accounts remain accessible until individually migrated; old short
 Run npm ci, npm run check, npm test, and npm audit --omit=dev. CI configuration must run successfully on GitHub before it is treated as an enforced control. Use branch protection after the checks are available; this file does not enable repository settings.
 
 Back up the database and SESSION_SECRET through separate protected processes. A lost encryption secret makes saved authenticator keys unrecoverable. Restrict database roles; the bootstrap currently needs CREATE TABLE privileges. For enterprise operation, run migrations separately and give the runtime only required data privileges.
+
+
+## Additional free protections (2026-11-19)
+
+- GitHub dependency graph, Dependabot vulnerability alerts/security updates, malware alerts, and private vulnerability reporting are enabled. Secret scanning and push protection were already enabled and were preserved. Paid AI scanning was left off.
+- The administrator dashboard includes a private security log viewer: 24-hour rejection/rate-limit/server-error counts plus the latest 50 events. Guests and students cannot read it. This is a local monitoring view, not an external SIEM or a staffed alert service.
+- CI is scheduled weekly as well as on main pushes and pull requests. Action implementations and the Docker base image are pinned. The container scan runs without uploading the container to a registry; scan findings are published to the repository's security interface.
+- MFA enrollment remains skipped at the owner's request. Existing passwords and authenticator settings were not changed.
+- A local MySQL client can no longer reach the cloud database unless its source network is deliberately added by an authorized operator. Local MAMP/XAMPP databases are unaffected. Never restore all-public access just for convenience.

@@ -7,3 +7,6 @@ uploads
 *.log
 public/assets/student-hero-8k.mp4
 test-results
+
+tests
+.github
