@@ -183,6 +183,14 @@
                         <label>パスワード<span class="password-field has-field-icon"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg><input id="student-password" name="password" type="password" minlength="4" maxlength="128" autocomplete="current-password" required><button type="button" class="password-toggle" aria-controls="student-password" aria-pressed="false">表示</button></span></label>
                         <button>ログイン →</button>
                     </form>
+                    <form id="legacy-upgrade-form" class="stack" hidden>
+                        <h2>アカウントを、もっと安全に。</h2>
+                        <p>続ける前に15〜64文字の新しいパスワードを設定してください。プロフィールと記事はそのまま残ります。5分以内に完了してください。</p>
+                        <label>新しいパスワード<input name="password" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label>
+                        <label>新しいパスワード（確認）<input name="password_confirmation" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label>
+                        <button>更新してログイン →</button>
+                        <a href="#forgot">パスワードの再設定へ</a>
+                    </form>
                     <p><a href="#forgot">パスワードを忘れた方</a></p><button type="button" id="resend-verification" class="text-action">確認メールを再送する</button><p class="legacy-hint">以前のアカウントはユーザー名でもログインできます。</p>
                 </div>
                 <div id="signup-panel" hidden>

@@ -318,6 +318,9 @@ async function navigate() {
     document.querySelector('#profile-joined').textContent = '';
     document.querySelector('#profile-avatar').src = iconSources.outline;
     document.querySelector('#profile-form').reset();
+    document.querySelector('#legacy-upgrade-form').hidden = true;
+    document.querySelector('#legacy-upgrade-form').reset();
+    document.querySelector('#student-login-form').hidden = false;
     document.querySelector('#student-login-panel').hidden = route === 'signup';
     document.querySelector('#signup-panel').hidden = route !== 'signup';
     for (const link of document.querySelectorAll('.auth-tabs a')) {
@@ -436,8 +439,20 @@ async function studentLoggedIn(result) {
     await navigate();
 }
 onForm('#student-login-form', data => String(data.get('email') || '').includes('@') ? '/student/email-login' : '/student/login', async result => {
+    if (result.passwordUpgradeRequired) {
+        csrf = result.csrf;
+        await navigate();
+        document.querySelector('#student-login-form').hidden = true;
+        document.querySelector('#legacy-upgrade-form').hidden = false;
+        document.querySelector('#legacy-upgrade-form input').focus();
+        return;
+    }
     await studentLoggedIn(result);
     showMessage('おかえりなさい！今日の発見を、あなたの言葉でつづってみよう。');
+});
+onForm('#legacy-upgrade-form', '/student/upgrade-password', async result => {
+    await studentLoggedIn(result);
+    showMessage('パスワードを更新しました！安心して、次の物語をつづりましょう。');
 });
 onForm('#signup-form', '/signup', async result => {
     location.hash = 'account';
