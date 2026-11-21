@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Student Voice | みんなのスクールブログ</title>
+    <title>Student Voice Kamata | みんなのスクールブログ</title>
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/editorial.css">
     <link rel="stylesheet" href="/school.css">
-    <meta name="description" content="Student Voice — 生徒がつづる、教室の向こうのストーリー。">
+    <meta name="description" content="Student Voice Kamata — 生徒がつづる、教室の向こうのストーリー。">
     <script src="/app.js" defer></script>
     <script src="/security-ui.js" defer></script>
     <script src="/navigation.js" defer></script>
@@ -18,7 +18,7 @@
 <a class="skip-link" href="#journal">記事一覧へスキップ</a>
 <header class="top">
     <div class="wrap header-row">
-        <a class="brand" href="#board"><span class="brand-mark" aria-hidden="true">S</span> Student Voice<span class="brand-dot">.</span></a>
+        <a class="brand" href="#board"><span class="brand-mark" aria-hidden="true">S</span> Student Voice Kamata<span class="brand-dot">.</span></a>
         <nav aria-label="メインメニュー">
             <a href="#board"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v15"/></svg><span>ブログ</span></a>
             <a href="#submit"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-4-4L5 15l-1 5ZM4 20h16"/></svg><span>記事を書く</span></a>
@@ -260,10 +260,15 @@
                     <output id="reset-code" aria-live="polite"></output>
                 </form>
             </details>
+            <h2>生徒アカウントの管理</h2>
+            <p>利用停止は現在のログインも無効にします。削除したアカウント・記事・コメントはゴミ箱から復元できます。</p>
+            <div id="staff-students" class="cards"></div>
+            <button type="button" id="staff-more-students" class="secondary" hidden>以前のアカウントを表示</button>
             <h2>投稿された記事</h2>
             <div id="staff-posts" class="cards"></div>
             <h2>コメントの管理</h2>
             <div id="staff-comments" class="cards"></div>
+            <button type="button" id="staff-more-comments" class="secondary" hidden>以前のコメントを表示</button>
         </div>
     </section>
     <noscript>このアプリを利用するには JavaScript を有効にしてください。</noscript>
@@ -276,12 +281,12 @@
 </section>
 <footer class="site-footer">
     <div class="wrap footer-columns">
-        <div class="footer-about"><h2>STUDENT VOICE</h2><p>学校の毎日を、みんなの言葉で。</p><p>生徒がつづるスクールブログ。<br>発見や経験を、ここからシェア。</p></div>
+        <div class="footer-about"><h2>STUDENT VOICE KAMATA</h2><p>学校の毎日を、みんなの言葉で。</p><p>生徒がつづるスクールブログ。<br>発見や経験を、ここからシェア。</p></div>
         <div><h2>EXPLORE</h2><a href="#board">ブログを読む</a><a href="#submit"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-4-4L5 15l-1 5ZM4 20h16"/></svg><span>記事を書く</span></a><a href="#profile">マイプロフィール</a></div>
         <div><h2>SUPPORT</h2><a href="#account">ログイン</a><a href="#forgot">パスワードの再設定</a><a href="#staff" data-staff-link hidden><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg><span>管理画面</span></a><a href="/photo-credits.html">写真・アイコンのクレジット</a></div>
         <div class="footer-join"><h2>YOUR NEXT CHAPTER</h2><p>あなたの声も、この物語の一部に。</p><a class="button" href="#signup">アカウントを作成 ↗</a></div>
     </div>
-    <div class="wrap footer-bottom"><p>© Student Voice · School Blog Project</p><p>Photography from Unsplash · Blog icons by cube29 &amp; Circlon Tech / Flaticon</p></div>
+    <div class="wrap footer-bottom"><p>© Student Voice Kamata · School Blog Project</p><p>Photography from Unsplash · Blog icons by cube29 &amp; Circlon Tech / Flaticon</p></div>
 </footer>
 <dialog id="post-success" class="celebration" aria-labelledby="success-title" aria-describedby="success-description">
     <div class="celebration-confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>

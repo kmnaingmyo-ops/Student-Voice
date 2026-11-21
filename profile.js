@@ -7,7 +7,7 @@ export function registerProfileRoutes(app, requireStudent, limit) {
             'SELECT username, CONVERT(email USING utf8mb4) AS email, display_name, bio, avatar_name IS NOT NULL AS has_avatar, created_at FROM students WHERE id = ?',
             [req.session.studentId]);
         const [posts] = await db.execute(
-            'SELECT id, title, category, body, status, created_at FROM suggestions WHERE student_id = ? ORDER BY id DESC',
+            'SELECT id, title, category, body, status, created_at FROM suggestions WHERE student_id = ? AND archived = 0 ORDER BY id DESC',
             [req.session.studentId]);
         res.json({ ...students[0], posts });
     });

@@ -95,7 +95,7 @@ export function securityLogging(req, res, next) {
     res.once('finish', () => {
         // Never log request bodies, email addresses, cookies, tokens, or URL queries.
         if (req.path.startsWith('/api') && (req.method !== 'GET' || res.statusCode >= 400)) {
-            const event = (req.route?.path || '/api/unknown').replace(/[^a-zA-Z0-9/_:-]/g, '').slice(0, 64);
+            const event = (req.moderationEvent || req.route?.path || '/api/unknown').replace(/[^a-zA-Z0-9/_:-]/g, '').slice(0, 64);
             audit(req, req.method + ':' + event.slice(0, 58), res.statusCode).catch(() => console.error('Audit persistence failed'));
         }
     });

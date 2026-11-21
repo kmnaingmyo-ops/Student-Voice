@@ -187,6 +187,46 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await guest('/suggestions/' + posted.id)).status, 404);
         assert.equal((await studentA('/suggestions/' + posted.id + '/comments', { body: 'Blocked on hidden post' })).status, 404);
 
+        await connection.query('DELETE FROM security_limits');
+        const postPath = '/staff/suggestions/' + posted.id;
+        const commentPath = '/staff/comments/' + comment.id;
+        const studentPath = '/staff/students/' + otherId;
+        assert.equal((await guest('/staff/students')).status, 401);
+        assert.equal((await studentA(studentPath + '/ban', {})).status, 401);
+        assert.equal((await moderator(studentPath + '/ban', {}, true)).status, 403);
+        const students = (await moderator('/staff/students')).body.students;
+        assert(students.some(student => student.id === otherId && student.account_status === 'active'));
+        assert(students.every(student => !('password_hash' in student) && !('reset_hash' in student)));
+        assert.equal((await moderator(studentPath + '/ban', {})).status, 200);
+        assert.equal((await other('/session')).body.student, false);
+        assert.equal((await other('/profile')).status, 401);
+        const otherCredentials = { username: 'otherfixture', password: 'copper mountains after rainfall' };
+        assert.equal((await other('/student/login', otherCredentials)).status, 403);
+        assert.equal((await moderator(studentPath + '/archive', {})).status, 200);
+        assert.equal((await moderator(studentPath + '/unban', {})).status, 409);
+        assert.equal((await moderator(studentPath + '/restore', {})).status, 200);
+        assert.equal((await other('/student/login', otherCredentials)).status, 403);
+        assert.equal((await moderator(studentPath + '/unban', {})).status, 200);
+        assert.equal((await other('/student/login', otherCredentials)).status, 200);
+
+        assert.equal((await moderator(postPath, { status: 'published' })).status, 200);
+        assert.equal((await moderator(commentPath, { hidden: false })).status, 200);
+        assert.equal((await moderator(commentPath + '/archive', {})).status, 200);
+        assert.equal((await guest('/suggestions/' + posted.id + '/social')).body.commentCount, 0);
+        assert.equal((await moderator(commentPath, { hidden: false })).status, 404);
+        assert.equal((await moderator(commentPath + '/restore', {})).status, 200);
+        assert.equal((await guest('/suggestions/' + posted.id + '/social')).body.commentCount, 0);
+        assert.equal((await moderator(commentPath, { hidden: false })).status, 200);
+        assert.equal((await guest('/suggestions/' + posted.id + '/social')).body.commentCount, 1);
+
+        assert.equal((await moderator(postPath + '/archive', {})).status, 200);
+        assert.equal((await guest('/suggestions/' + posted.id)).status, 404);
+        assert(!(await studentA('/profile')).body.posts.some(post => post.id === posted.id));
+        assert.equal((await moderator(postPath, { status: 'published' })).status, 404);
+        assert.equal((await moderator(postPath + '/restore', {})).status, 200);
+        assert.equal((await guest('/suggestions/' + posted.id)).status, 404);
+        assert((await studentA('/profile')).body.posts.some(post => post.id === posted.id && post.status === 'hidden'));
+
         const avatar = bytes => {
             const data = new FormData();
             data.set('display_name', 'Owner fixture'); data.set('bio', 'Fictional bio');

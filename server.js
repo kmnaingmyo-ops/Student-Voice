@@ -77,8 +77,8 @@ app.use(['/api/login', '/api/student/login', '/api/student/email-login', '/api/s
 registerSecurityRoutes(app, loginLimit, mfaLimit);
 
 async function requireStudent(req, res, next) {
-    const [rows] = await db.execute('SELECT password_version FROM students WHERE id = ?', [req.session.studentId || 0]);
-    if (!rows.length || rows[0].password_version !== req.session.passwordVersion) {
+    const [rows] = await db.execute('SELECT password_version, account_status FROM students WHERE id = ?', [req.session.studentId || 0]);
+    if (!rows.length || rows[0].account_status !== 'active' || rows[0].password_version !== req.session.passwordVersion) {
         delete req.session.studentId;
         return res.status(401).json({ error: '投稿するには生徒アカウントでログインしてください。' });
     }
@@ -128,10 +128,11 @@ app.post('/api/student/login', loginLimit, async (req, res, next) => {
     const { username: oldUsername, email, password } = req.body || {};
     const username = oldUsername || email;
     if (!studentCredentials(username, password, 4)) return res.status(400).json({ error: '入力内容を確認してください。' });
-    const [rows] = await db.execute('SELECT id, password_hash, password_version FROM students WHERE username = ? AND firebase_uid IS NULL', [username]);
+    const [rows] = await db.execute('SELECT id, password_hash, password_version, account_status FROM students WHERE username = ? AND firebase_uid IS NULL', [username]);
     if (!await verifyPassword(password, rows[0]?.password_hash || dummyHash)) {
         return res.status(401).json({ error: 'ユーザー名またはパスワードを確認してください。' });
     }
+    if (rows[0].account_status !== 'active') return res.status(403).json({ error: 'このアカウントは利用できません。管理者に相談してください。' });
     if (passwordProblem(password, username)) {
         // This challenge proves the old password, but grants no student privileges.
         await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
@@ -151,14 +152,14 @@ app.post('/api/student/upgrade-password', loginLimit, async (req, res, next) => 
     };
     if (!challenge || !Number.isFinite(challenge.at) || Date.now() - challenge.at > 300000 || challenge.at > Date.now()) return restart();
     const { password, password_confirmation: confirmation } = req.body || {};
-    const [rows] = await db.execute('SELECT id, username, password_hash, password_version FROM students WHERE id = ? AND firebase_uid IS NULL', [challenge.id]);
+    const [rows] = await db.execute('SELECT id, username, password_hash, password_version FROM students WHERE id = ? AND firebase_uid IS NULL AND account_status = \'active\'', [challenge.id]);
     const student = rows[0];
     if (!student || student.password_version !== challenge.version || fingerprint(student.password_hash) !== challenge.tag) return restart();
     const problem = passwordProblem(password, student.username);
     if (problem) return res.status(400).json({ error: problem });
     if (password !== confirmation) return res.status(400).json({ error: '確認用パスワードが一致しません。' });
     // Compare the original hash and version so a concurrent reset cannot be overwritten.
-    const [updated] = await db.execute('UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE id = ? AND firebase_uid IS NULL AND password_version = ? AND password_hash = ?',
+    const [updated] = await db.execute('UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE id = ? AND firebase_uid IS NULL AND account_status = \'active\' AND password_version = ? AND password_hash = ?',
         [await hashPassword(password), student.id, student.password_version, student.password_hash]);
     if (updated.affectedRows !== 1) return restart();
     startStudentSession(req, res, next, { id: student.id, password_version: student.password_version + 1 });
@@ -171,7 +172,7 @@ app.post('/api/student/reset', resetLimit, async (req, res) => {
     }
     const digest = createHash('sha256').update(code).digest('hex');
     const [result] = await db.execute(
-        'UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE username = ? AND firebase_uid IS NULL AND reset_hash = ? AND reset_expires > UTC_TIMESTAMP()',
+        'UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE username = ? AND firebase_uid IS NULL AND account_status = \'active\' AND reset_hash = ? AND reset_expires > UTC_TIMESTAMP()',
         [await hashPassword(password), username, digest]);
     if (!result.affectedRows) return res.status(400).json({ error: 'コードが無効か、有効期限が切れています。' });
     res.json({ message: 'パスワードを更新しました。新しいパスワードでログインしてください。' });
@@ -184,7 +185,7 @@ app.post('/api/staff/reset-code', requireStaff, loginLimit, async (req, res) => 
     }
     const code = randomBytes(16).toString('hex');
     const [result] = await db.execute(
-        'UPDATE students SET reset_hash = ?, reset_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 15 MINUTE) WHERE username = ?',
+        'UPDATE students SET reset_hash = ?, reset_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 15 MINUTE) WHERE username = ? AND firebase_uid IS NULL AND account_status = \'active\'',
         [createHash('sha256').update(code).digest('hex'), username]);
     if (!result.affectedRows) return res.status(404).json({ error: '生徒アカウントが見つかりません。' });
     res.json({ code, message: '本人確認後に伝えてください。有効期限は15分、使用は1回です。' });
@@ -193,8 +194,8 @@ app.post('/api/staff/reset-code', requireStaff, loginLimit, async (req, res) => 
 app.get('/api/session', async (req, res) => {
     if (req.session.staffId && !await hasStaffSession(req)) delete req.session.staffId;
     if (req.session.studentId) {
-        const [rows] = await db.execute('SELECT password_version FROM students WHERE id = ?', [req.session.studentId]);
-        if (!rows.length || rows[0].password_version !== req.session.passwordVersion) {
+        const [rows] = await db.execute('SELECT password_version, account_status FROM students WHERE id = ?', [req.session.studentId]);
+        if (!rows.length || rows[0].account_status !== 'active' || rows[0].password_version !== req.session.passwordVersion) {
             delete req.session.studentId;
         }
     }
@@ -203,7 +204,7 @@ app.get('/api/session', async (req, res) => {
 
 app.get('/api/suggestions', async (req, res) => {
     const [rows] = await db.execute(
-        "SELECT id, title, category, body, created_at, cover_icon, image_name IS NOT NULL AS has_image, (SELECT COUNT(*) FROM reactions WHERE post_id = suggestions.id) AS reaction_count, (SELECT COUNT(*) FROM comments WHERE post_id = suggestions.id AND hidden = 0) AS comment_count FROM suggestions WHERE status = 'published' ORDER BY id DESC",
+        "SELECT id, title, category, body, created_at, cover_icon, image_name IS NOT NULL AS has_image, (SELECT COUNT(*) FROM reactions WHERE post_id = suggestions.id) AS reaction_count, (SELECT COUNT(*) FROM comments WHERE post_id = suggestions.id AND hidden = 0 AND archived = 0) AS comment_count FROM suggestions WHERE status = 'published' AND archived = 0 ORDER BY id DESC",
     );
     res.json(rows);
 });
@@ -212,7 +213,7 @@ app.get('/api/suggestions/:id', async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isSafeInteger(id) || id < 1) return res.status(404).json({ error: '記事が見つかりません。' });
     const [rows] = await db.execute(
-        "SELECT id, title, category, body, created_at, cover_icon, image_name IS NOT NULL AS has_image FROM suggestions WHERE id = ? AND status = 'published'", [id]);
+        "SELECT id, title, category, body, created_at, cover_icon, image_name IS NOT NULL AS has_image FROM suggestions WHERE id = ? AND status = 'published' AND archived = 0", [id]);
     if (!rows.length) return res.status(404).json({ error: '記事が見つかりません。' });
     res.json(rows[0]);
 });
@@ -261,7 +262,7 @@ app.post('/api/login', loginLimit, async (req, res, next) => {
 
 app.get('/api/staff/suggestions', requireStaff, async (req, res) => {
     const [rows] = await db.execute(
-        "SELECT id, title, category, body, status, cover_icon, image_name IS NOT NULL AS has_image FROM suggestions ORDER BY (status = 'pending') DESC, id DESC",
+        "SELECT id, title, category, body, status, archived, cover_icon, image_name IS NOT NULL AS has_image FROM suggestions ORDER BY (status = 'pending') DESC, id DESC",
     );
     res.json(rows);
 });
@@ -272,9 +273,42 @@ app.post('/api/staff/suggestions/:id', requireStaff, async (req, res) => {
     if (!Number.isSafeInteger(id) || id < 1 || !['published', 'hidden'].includes(status)) {
         return res.status(400).json({ error: '入力内容を確認してください。' });
     }
-    const [result] = await db.execute('UPDATE suggestions SET status = ? WHERE id = ?', [status, id]);
+    const [result] = await db.execute('UPDATE suggestions SET status = ? WHERE id = ? AND archived = 0', [status, id]);
     if (!result.affectedRows) return res.status(404).json({ error: '投稿が見つかりません。' });
     res.json({ message: '投稿の状態を更新しました。' });
+});
+
+app.get('/api/staff/students', requireStaff, async (req, res) => {
+    const before = Number(req.query.before ?? 4294967296);
+    if (!Number.isSafeInteger(before) || before < 1 || before > 4294967296) return res.status(400).json({ error: 'ページを確認してください。' });
+    const [rows] = await db.execute('SELECT id, username, display_name, CONVERT(email USING utf8mb4) AS email, account_status FROM students WHERE id < ? ORDER BY id DESC LIMIT 51', [before]);
+    const students = rows.slice(0, 50);
+    res.json({ students, next: rows.length > 50 ? students.at(-1).id : null });
+});
+
+app.post('/api/staff/students/:id/:action', requireStaff, async (req, res) => {
+    const id = Number(req.params.id);
+    const action = req.params.action;
+    const transitions = { ban: ['banned', 'active', 'active'], unban: ['active', 'banned', 'banned'],
+        archive: ['archived', 'active', 'banned'], restore: ['banned', 'archived', 'archived'] };
+    if (!Number.isSafeInteger(id) || id < 1 || !Object.hasOwn(transitions, action)) return res.status(400).json({ error: '入力内容を確認してください。' });
+    const [state, beforeA, beforeB] = transitions[action];
+    const [result] = await db.execute('UPDATE students SET account_status = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE id = ? AND account_status IN (?, ?)',
+        [state, id, beforeA, beforeB]);
+    if (!result.affectedRows) return res.status(409).json({ error: 'アカウントが見つからないか、状態が変わりました。' });
+    req.moderationEvent = '/api/staff/students/' + id + '/' + action;
+    res.json({ message: 'アカウントの状態を更新しました。' });
+});
+
+app.post('/api/staff/suggestions/:id/:action', requireStaff, async (req, res) => {
+    const id = Number(req.params.id);
+    const action = req.params.action;
+    if (!Number.isSafeInteger(id) || id < 1 || !['archive', 'restore'].includes(action)) return res.status(400).json({ error: '入力内容を確認してください。' });
+    const archived = action === 'archive';
+    const [result] = await db.execute("UPDATE suggestions SET archived = ?, status = 'hidden' WHERE id = ? AND archived = ?", [archived, id, !archived]);
+    if (!result.affectedRows) return res.status(409).json({ error: '記事が見つからないか、状態が変わりました。' });
+    req.moderationEvent = '/api/staff/suggestions/' + id + '/' + action;
+    res.json({ message: archived ? '記事をゴミ箱に移動しました。' : '記事を非公開の状態で復元しました。' });
 });
 
 app.post('/api/logout', (req, res, next) => {
