@@ -173,9 +173,9 @@ function renderArticle(post, social) {
             event.preventDefault();
             button.disabled = true;
             try {
-                await api('/suggestions/' + post.id + '/comments', { body: input.value });
+                const result = await api('/suggestions/' + post.id + '/comments', { body: input.value });
                 await refreshSocial(post);
-                showMessage('コメントを投稿しました。');
+                showMessage(result.message);
             } catch (error) { showMessage(error.message, true); button.disabled = false; }
         });
         socialSection.append(form);
@@ -189,6 +189,7 @@ function renderArticle(post, social) {
     for (const comment of social.comments) {
         const card = element('article', '', 'comment');
         card.append(element('strong', comment.username), element('p', comment.body, 'body'));
+        if (comment.review_pending) card.append(element('span', '先生の確認待ち', 'tag'));
         socialSection.append(card);
     }
     target.append(socialSection);
@@ -226,7 +227,9 @@ async function api(path, data) {
     const result = await response.json();
     if (!response.ok) {
         if (response.status === 401) signedIn = false;
-        throw new Error(result.error || '通信に失敗しました。');
+        const error = new Error(result.error || '通信に失敗しました。');
+        error.status = response.status;
+        throw error;
     }
     return result;
 }
@@ -238,51 +241,65 @@ function element(tag, text, className) {
     return node;
 }
 
-function adminAction(label, path, data = {}, confirmation = '') {
+function adminAction(label, path, { data = {}, confirmation = '', update } = {}) {
     const button = element('button', label, 'secondary');
     button.type = 'button';
     button.addEventListener('click', async () => {
         if (confirmation && !window.confirm(confirmation)) return;
-        button.disabled = true;
+        const version = viewVersion;
+        const buttons = button.closest('.actions').querySelectorAll('button');
+        for (const control of buttons) control.disabled = true;
         try {
             const result = await api(path, data);
-            await navigate();
+            if (version !== viewVersion) return;
+            const card = button.closest('article');
+            const updated = update();
+            card.replaceWith(updated);
+            updated.querySelector('button')?.focus({ preventScroll: true });
             showMessage(result.message);
         } catch (error) {
+            if (version !== viewVersion) return;
+            // Only a rejected admin session needs to return to the login screen.
+            if (error.status === 401) await navigate();
             showMessage(error.message, true);
         } finally {
-            button.disabled = false;
+            for (const control of buttons) control.disabled = false;
         }
     });
     return button;
 }
 
-function trashAction(path, archived) {
-    return archived ? adminAction('ゴミ箱から復元', path + '/restore')
-        : adminAction('削除（ゴミ箱へ）', path + '/archive', {}, 'ゴミ箱に移動しますか？管理画面から復元できます。');
+function trashAction(path, archived, update) {
+    return archived ? adminAction('ゴミ箱から復元', path + '/restore', { update })
+        : adminAction('削除（ゴミ箱へ）', path + '/archive', {
+            update, confirmation: 'ゴミ箱に移動しますか？管理画面から復元できます。',
+        });
 }
 
-function renderPosts(target, posts, staffView) {
-    target.replaceChildren();
-    if (!posts.length) target.append(element('p', '投稿はまだありません。', 'panel'));
-    for (const post of posts) {
-        const card = element('article', '', 'panel');
-        card.append(element('span', post.category, 'tag'));
-        if (staffView) card.append(element('span', post.archived ? 'ゴミ箱' : statuses[post.status], 'tag'));
-        card.append(element('h2', post.title), element('p', post.body, 'body'));
-        card.prepend(cover(post));
-        if (staffView) {
-            const path = '/staff/suggestions/' + post.id;
-            const actions = element('div', '', 'actions');
-            if (!post.archived) {
-                if (post.status !== 'published') actions.append(adminAction('公開する', path, { status: 'published' }));
-                if (post.status !== 'hidden') actions.append(adminAction('非公開にする', path, { status: 'hidden' }));
-            }
-            actions.append(trashAction(path, post.archived));
-            card.append(actions);
+function staffPostCard(post) {
+    const card = element('article', '', 'panel');
+    card.append(cover(post), element('span', post.category, 'tag'),
+        element('span', post.archived ? 'ゴミ箱' : statuses[post.status], 'tag'),
+        element('h2', post.title), element('p', post.body, 'body'));
+    const path = '/staff/suggestions/' + post.id;
+    const actions = element('div', '', 'actions');
+    if (!post.archived) {
+        for (const [status, label] of [['published', '公開する'], ['hidden', '非公開にする']]) {
+            if (post.status !== status) actions.append(adminAction(label, path, {
+                data: { status }, update: () => staffPostCard({ ...post, status }),
+            }));
         }
-        target.append(card);
     }
+    actions.append(trashAction(path, post.archived,
+        () => staffPostCard({ ...post, status: 'hidden', archived: !post.archived })));
+    card.append(actions);
+    return card;
+}
+
+function renderStaffPosts(posts) {
+    const target = document.querySelector('#staff-posts');
+    target.replaceChildren(...posts.map(staffPostCard));
+    if (!posts.length) target.append(element('p', '投稿はまだありません。', 'panel'));
 }
 
 async function navigate() {
@@ -294,6 +311,7 @@ async function navigate() {
         : ['board', 'submit', 'staff', 'account', 'forgot', 'profile'].includes(route) ? route : 'board';
     document.title = 'Student Voice Kamata | みんなのスクールブログ';
     showMessage('');
+    if (document.querySelector('#delete-account-dialog').open) document.querySelector('#delete-account-dialog').close();
     for (const section of document.querySelectorAll('main > section')) {
         section.hidden = section.id !== page;
     }
@@ -372,13 +390,16 @@ async function navigate() {
             if (version === viewVersion) renderArticle(post, social);
         }
         if (page === 'staff' && signedIn) {
-            const [posts, comments, students] = await Promise.all([api('/staff/suggestions'), api('/staff/comments'), api('/staff/students')]);
+            const [posts, comments, students, media] = await Promise.all([api('/staff/suggestions'), api('/staff/comments'), api('/staff/students'), api('/staff/media-usage')]);
             if (version !== viewVersion) return;
             document.querySelector('#login-panel').hidden = true;
             document.querySelector('#dashboard').hidden = false;
-            renderPosts(document.querySelector('#staff-posts'), posts, true);
+            renderStaffPosts(posts);
             renderStaffComments(comments);
             renderStaffStudents(students);
+            const mb = bytes => (bytes / 1048576).toFixed(1);
+            document.querySelector('#staff-media-usage').textContent = media.quota === null ? '画像はローカルに保存されています。'
+                : '画像の保存容量：' + mb(media.bytes) + ' / ' + mb(media.quota) + ' MB';
             await loadStaffSecurity();
         }
     } catch (error) {
@@ -562,45 +583,68 @@ document.querySelector('#logout').addEventListener('click', async () => {
         showMessage(error.message, true);
     }
 });
+function staffCommentCard(comment) {
+    const card = element('article', '', 'panel');
+    const path = '/staff/comments/' + comment.id;
+    card.append(element('span', comment.archived ? 'ゴミ箱' : comment.review_pending ? '確認待ち' : comment.hidden ? '非公開' : '公開中', 'tag'),
+        element('h3', comment.title), element('strong', comment.username), element('p', comment.body, 'body'));
+    const actions = element('div', '', 'actions');
+    if (!comment.archived) {
+        if (comment.hidden || comment.review_pending) actions.append(adminAction('公開する', path, {
+            data: { hidden: false }, update: () => staffCommentCard({ ...comment, hidden: false, review_pending: false }),
+        }));
+        if (!comment.hidden) actions.append(adminAction('非公開にする', path, {
+            data: { hidden: true }, update: () => staffCommentCard({ ...comment, hidden: true, review_pending: false }),
+        }));
+    }
+    actions.append(trashAction(path, comment.archived,
+        () => staffCommentCard({ ...comment, hidden: true, review_pending: false, archived: !comment.archived })));
+    card.append(actions);
+    return card;
+}
+
 function renderStaffComments(comments) {
     const target = document.querySelector('#staff-comments');
     if (!comments.length && !target.children.length) target.append(element('p', 'コメントはまだありません。', 'panel'));
-    for (const comment of comments) {
-        const card = element('article', '', 'panel');
-        const path = '/staff/comments/' + comment.id;
-        card.append(element('span', comment.archived ? 'ゴミ箱' : comment.hidden ? '非公開' : '公開中', 'tag'),
-            element('h3', comment.title), element('strong', comment.username), element('p', comment.body, 'body'));
-        const actions = element('div', '', 'actions');
-        if (!comment.archived) actions.append(adminAction(comment.hidden ? '公開する' : '非公開にする', path, { hidden: !comment.hidden }));
-        actions.append(trashAction(path, comment.archived));
-        card.append(actions);
-        target.append(card);
-    }
+    target.append(...comments.map(staffCommentCard));
     const more = document.querySelector('#staff-more-comments');
     more.hidden = comments.length < 100;
     more.dataset.before = comments.at(-1)?.id || '';
 }
 
+function staffStudentCard(student) {
+    const card = element('article', '', 'panel');
+    const labels = { active: '利用中', banned: '利用停止中', archived: 'ゴミ箱' };
+    card.append(element('span', labels[student.account_status], 'tag'),
+        element('h3', student.display_name || student.username),
+        element('p', '@' + student.username + (student.email ? ' · ' + student.email : '')));
+    const path = '/staff/students/' + student.id;
+    const actions = element('div', '', 'actions');
+    const update = status => () => staffStudentCard({ ...student, account_status: status });
+    if (student.account_status === 'active') {
+        actions.append(adminAction('利用停止（BAN）', path + '/ban', {
+            update: update('banned'), confirmation: 'このアカウントを利用停止にし、ログイン中の端末をすべて無効にしますか？',
+        }));
+    } else if (student.account_status === 'banned') {
+        actions.append(adminAction('利用停止を解除', path + '/unban', { update: update('active') }));
+    }
+    const archived = student.account_status === 'archived';
+    actions.append(trashAction(path, archived, update(archived ? 'banned' : 'archived')));
+    if (archived) {
+        const erase = element('button', 'アカウントを完全に削除', 'secondary');
+        erase.type = 'button';
+        erase.addEventListener('click', () => openAccountDeletion(path + '/delete-permanently', student.username, card));
+        actions.append(erase);
+    }
+
+    card.append(actions);
+    return card;
+}
+
 function renderStaffStudents({ students, next }) {
     const target = document.querySelector('#staff-students');
     if (!students.length && !target.children.length) target.append(element('p', 'アカウントはまだありません。', 'panel'));
-    const labels = { active: '利用中', banned: '利用停止中', archived: 'ゴミ箱' };
-    for (const student of students) {
-        const card = element('article', '', 'panel');
-        card.append(element('span', labels[student.account_status], 'tag'),
-            element('h3', student.display_name || student.username),
-            element('p', '@' + student.username + (student.email ? ' · ' + student.email : '')));
-        const path = '/staff/students/' + student.id;
-        const actions = element('div', '', 'actions');
-        if (student.account_status === 'active') {
-            actions.append(adminAction('利用停止（BAN）', path + '/ban', {}, 'このアカウントを利用停止にし、ログイン中の端末をすべて無効にしますか？'));
-        } else if (student.account_status === 'banned') {
-            actions.append(adminAction('利用停止を解除', path + '/unban'));
-        }
-        actions.append(trashAction(path, student.account_status === 'archived'));
-        card.append(actions);
-        target.append(card);
-    }
+    target.append(...students.map(staffStudentCard));
     const more = document.querySelector('#staff-more-students');
     more.hidden = !next;
     more.dataset.before = next || '';
@@ -624,6 +668,49 @@ for (const [target, path, render] of [
         }
     });
 }
+
+const deleteDialog = document.querySelector('#delete-account-dialog');
+const deleteForm = document.querySelector('#delete-account-form');
+let deletionTarget;
+function openAccountDeletion(path, name, card = null) {
+    deletionTarget = { path, card };
+    deleteForm.reset();
+    document.querySelector('#delete-account-target').textContent = name;
+    deleteDialog.showModal();
+}
+document.querySelector('#open-self-delete').addEventListener('click', () => openAccountDeletion('/student/delete-account', '自分のアカウント'));
+document.querySelector('#delete-account-cancel').addEventListener('click', () => deleteDialog.close());
+deleteDialog.addEventListener('close', () => deleteForm.reset());
+deleteForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const { path, card } = deletionTarget;
+    const data = Object.fromEntries(new FormData(deleteForm));
+    const submit = deleteForm.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+        const result = await api(path, data);
+        deleteDialog.close();
+        if (card) {
+            card.remove();
+            // Other lists may contain this student's posts or comments.
+            document.querySelector('#staff-posts').replaceChildren();
+            document.querySelector('#staff-comments').replaceChildren();
+            document.querySelector('#staff-more-comments').hidden = true;
+            const version = viewVersion;
+            const [posts, comments] = await Promise.all([api('/staff/suggestions'), api('/staff/comments')]);
+            if (viewVersion === version && location.hash === '#staff') {
+                renderStaffPosts(posts);
+                renderStaffComments(comments);
+            }
+        } else {
+            await navigate();
+        }
+        showMessage(result.message);
+    } catch (error) {
+        deleteForm.elements.password.value = '';
+        showMessage(error.message, true);
+    } finally { submit.disabled = false; }
+});
 
 let previewUrl = null;
 function updateCoverPreview() {

@@ -4,6 +4,7 @@ async function loadStaffSecurity() {
     document.querySelector('#security-status').textContent = (status.mfaEnabled ? '二段階認証：有効。' : '二段階認証：未設定。認証アプリの設定をおすすめします。')
         + (status.passwordUpgradeNeeded ? ' パスワードを15文字以上の強いものに変更してください。' : '');
     document.querySelector('#mfa-setup-form').hidden = status.mfaEnabled;
+    document.querySelector('#mfa-recovery-form').hidden = !status.mfaEnabled;
 }
 onForm('#mfa-login-form', '/staff/mfa-login', async result => {
     csrf = result.csrf;
@@ -23,6 +24,10 @@ onForm('#mfa-enable-form', '/staff/mfa-enable', async result => {
     document.querySelector('#mfa-recovery').hidden = false;
     await loadStaffSecurity();
     showMessage(result.message);
+});
+onForm('#mfa-recovery-form', '/staff/mfa-recovery-codes', async result => {
+    document.querySelector('#mfa-recovery-codes').textContent = result.recoveryCodes.join('\n');
+    document.querySelector('#mfa-recovery').hidden = false;
 });
 document.querySelector('#mfa-hide-codes').addEventListener('click', () => {
     document.querySelector('#mfa-recovery-codes').textContent = '';
