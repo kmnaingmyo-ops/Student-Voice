@@ -17,7 +17,7 @@ export async function startRestrictedContainer() {
         '--add-host=host.docker.internal:host-gateway', '--publish', '127.0.0.1::3000',
         '--env', 'DB_HOST=host.docker.internal', '--env', 'DB_PORT=' + (process.env.DB_PORT || '3306'),
         '--env', 'DB_NAME', '--env', 'DB_USER', '--env', 'DB_PASSWORD', '--env', 'SESSION_SECRET',
-        '--env', 'DB_AUTO_MIGRATE=false', '--env', 'MEDIA_STORAGE=database', image);
+        '--env', 'MEDIA_QUOTA_BYTES', '--env', 'COMMENTS_PER_ACCOUNT_HOUR', '--env', 'DB_AUTO_MIGRATE=false', '--env', 'MEDIA_STORAGE=database', image);
     assert.match(id, /^[a-f0-9]{64}$/, 'Unexpected Docker container identifier');
     const stop = async () => { await docker('rm', '--force', id); };
     try {

@@ -82,3 +82,18 @@ test('separate migrations preserve existing accounts and can run twice',
         await connection.end();
     }
 });
+
+
+test('backup paths must be outside the repository', async () => {
+    const { mkdtemp, mkdir, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { assertExternalBackupPath } = await import('../recovery.js');
+    const root = await mkdtemp(join(tmpdir(), 'sv-backup-path-'));
+    const repo = join(root, 'checkout');
+    try {
+        await mkdir(join(repo, 'backups'), { recursive: true });
+        await assert.rejects(assertExternalBackupPath(join(repo, 'backups', 'example.svbackup'), repo), /outside the repository/);
+        await assertExternalBackupPath(join(root, 'example.svbackup'), repo);
+    } finally { await rm(root, { recursive: true, force: true }); }
+});
