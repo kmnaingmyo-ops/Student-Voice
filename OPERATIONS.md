@@ -28,10 +28,10 @@ Do not revoke the old account before the restricted account has been tested. Cre
 5. Make a private `backups` folder and run:
 
    ```powershell
-   npm run backup -- backups/school-2026-11-19.svbackup
+   npm run backup:external -- C:/PrivateBackups/school-2026-11-19.svbackup
    ```
 
-The file uses gzip and AES-256-GCM with a random nonce. A wrong key or modified ciphertext is rejected. Existing files are never overwritten. Files under the project's public folder are rejected, including a symlinked parent directory. The command requests owner-only permissions where the operating system supports them; on Windows, verify the folder's NTFS permissions yourself. Keep encrypted copies on a separate protected storage device with school-approved retention. No automatic upload, retention, production export, or scheduling is enabled by this release.
+The file uses gzip and AES-256-GCM with a random nonce. A wrong key or modified ciphertext is rejected. Existing files are never overwritten. Files inside the checkout are rejected, including when a symbolic link resolves inside it. The command requests owner-only permissions where the operating system supports them; on Windows, verify the folder's NTFS permissions yourself. Keep encrypted copies on a separate protected storage device with school-approved retention. No automatic upload, retention, production export, or scheduling is enabled by this release.
 
 Backups cover the current staff, students, suggestions, reactions, comments, staff_security, security_events, and database-stored media_files tables. They deliberately omit app_sessions and security_limits, so restoring does not revive sessions. They have a 100 MiB uncompressed limit and 100,000-row limit per table; a larger service needs a streaming managed backup system. Pause schema changes during the snapshot. File-based media in a local `uploads` folder requires a separate protected file backup; the live deployment uses database media.
 
@@ -49,7 +49,7 @@ Firebase accounts, provider configuration, Render settings, and SESSION_SECRET a
 3. Run:
 
    ```powershell
-   npm run restore-test -- backups/school-2026-11-19.svbackup
+   npm run restore-test -- C:/PrivateBackups/school-2026-11-19.svbackup
    ```
 
 4. Verify article content/counts, Japanese text, profiles, image bytes, moderation, comments/reactions, and administrator access with the original SESSION_SECRET in an isolated app. Do not connect test accounts to real email services unnecessarily.
@@ -59,3 +59,23 @@ The tool refuses production names, a name matching the source, non-utf8mb4 targe
 Automated tests perform a real encrypted round trip with fictional articles, comments, reactions, binary email fields, image bytes and encrypted MFA records. They verify that session/counter tables remain empty, altered ciphertext/wrong keys fail, and repeat/production-target restores are refused. This is a tested application-level recovery path, not a completed restore drill of your TiDB production backup or a guaranteed recovery time.
 
 For enterprise use, designate a recovery owner, approve backup retention, set recovery time/data-loss objectives, and run a supervised drill on production-like infrastructure. TiDB's current free daily backup retains only one day, so do not rely on it as the only long-term copy.
+
+## Roll out the security review
+
+1. Keep the current `SESSION_SECRET`. Do not set a password cutoff for this release. Record the currently deployed Render commit for rollback.
+2. With the database operator, run `upgrade-legacy-password-policy.sql`, `upgrade-abuse-guards.sql`, and `upgrade-student-deletion.sql`. Run each SQL statement separately if the console only executes the statement at the cursor. Fresh installations and `npm run db:migrate` create the same schema.
+3. Apply the additional table grants in `runtime-permissions.sql` with the actual runtime account name. This includes locking the media quota row, recording deleted Firebase identities and deleting the selected student data. It keeps schema changes with the operator.
+4. Deploy the reviewed commit. The IP trust default remains one proxy hop on Render. Set `TRUST_PROXY_HOPS=1` explicitly only after confirming the architecture and observed source addresses. Keep `ALLOWED_EMAIL_DOMAINS` empty until a list is approved. It applies to signup only. Configure the account budgets in `.env.example` only if the defaults are unsuitable.
+5. Run the live checks and test the feature paths with disposable accounts. Confirm that the dashboard remains visible after a trash or restore action. Do not test permanent deletion on a real student account.
+6. Before rotating secrets, read the procedure below. After enabling the encryption update, avoid rolling back to code that only reads the old encryption format. A forward hotfix is the safest rollback path once users have signed in or MFA records have been rewritten.
+
+## Rotate the session secret gradually
+
+1. Store the currently deployed master and the new random master in an approved password manager. In the hosting settings set `SESSION_SECRET_PREVIOUS` to the current value. Set `SESSION_SECRET` to the new value in the same release. Never paste secret values into source control or logs.
+2. Redeploy. Older cookies and encrypted database sessions remain readable with the previous master. Give old sessions at least their full one-hour lifetime. The first successful MFA login rewrites that teacher's enrollment using the current key. Have each enrolled teacher verify sign-in using their authenticator.
+3. If an enrollment predates the key separation release, request fresh recovery codes from the teacher security panel while both keys are still available. The original code digests needed the legacy master. New codes use a separate key. The authenticator registration stays usable.
+4. Remove `SESSION_SECRET_PREVIOUS` only after all active enrollments and recovery codes have been verified and older sessions have expired. Preserve the old master in secure recovery storage if older backups may need it. Treat emergency compromise recovery separately, since retaining a compromised key prolongs exposure.
+
+## Complete a deletion request
+
+Verify the requester privately. When deleting on behalf of a student, put the account in Trash first, then use the permanent action and confirm with your own teacher password. The application deletes the student's articles and associated comments and reactions even when other students wrote them. A Firebase credential deleted by a teacher requires a separate step in Firebase Console. The application stores a SHA-256 digest of the old Firebase UID to prevent the deleted credential from silently making a new local account. Do not record the student's email in tickets or security logs. Before restoring a backup, apply verified deletion requests again to the recovery copy to avoid restoring removed data. The school must approve retention periods before inviting students to use the service.

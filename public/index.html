@@ -98,7 +98,7 @@
             <span id="count">0 / 5000</span>
             <progress id="writing-progress" max="5000" value="0" aria-label="本文の文字数"></progress>
             <p class="editor-note">記事は先生が確認した後に公開されます。氏名や連絡先などの個人情報は書かないでください。</p>
-            <div class="editor-footer"><p>ユーザー名は公開されません。</p><button>確認を依頼する ↗</button></div>
+            <div class="editor-footer"><p>メールアドレスは公開されません。コメントにはアカウントの別名が表示されます。</p><button>確認を依頼する ↗</button></div>
         </form>
         <aside class="writer-sidebar"><p class="eyebrow">FIND YOUR ANGLE</p><h2>何から書こう？</h2><p>話題を選んで、最初の一文を考えてみよう。</p>
             <div class="writing-prompts">
@@ -129,6 +129,7 @@
                     <h2 id="profile-name"></h2><p id="profile-username"></p><p id="profile-bio" class="body"></p>
                     <p id="profile-joined"></p><a class="button" href="#submit">記事を書く ↗</a>
                     <button id="profile-logout" class="secondary">ログアウト</button>
+                    <button id="open-self-delete" type="button" class="secondary">アカウントを完全に削除</button>
                 </aside>
                 <form id="profile-form" class="panel stack">
                     <div class="profile-edit-heading"><p class="eyebrow">MAKE IT YOURS</p><h2>あなたのことを、少しだけ。</h2><p>好きなことや、今夢中になっていることを書いてみよう。</p></div>
@@ -248,6 +249,7 @@
             <details id="staff-security-panel" class="panel"><summary>アカウントのセキュリティ</summary><p id="security-status" role="status"></p>
                 <form id="mfa-setup-form" class="stack"><h2>二段階認証を設定</h2><p>認証アプリでログインを保護します。回復コードは安全な場所に保存してください。</p><label>現在のパスワード<input name="password" type="password" maxlength="128" autocomplete="current-password" required></label><button>設定キーを表示</button></form>
                 <div id="mfa-enrollment" hidden><p>認証アプリでアカウントを追加し、「設定キーを入力」を選んでください。</p><output id="mfa-secret"></output><form id="mfa-enable-form" class="stack"><label>認証アプリの6桁のコード<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label><button>二段階認証を有効にする</button></form></div>
+                <form id="mfa-recovery-form" class="stack" hidden><h2>回復コードを更新</h2><p>古い回復コードは使えなくなります。認証アプリの登録はそのままです。</p><label>現在のパスワード<input name="password" type="password" maxlength="128" autocomplete="current-password" required></label><label>認証アプリのコード<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label><button>新しい回復コードを発行</button></form>
                 <div id="mfa-recovery" hidden><h3>回復コード — 一度だけ表示されます</h3><p>各コードは1回だけ使えます。認証アプリを紛失したときのために、パスワードとは別の安全な場所に保存してください。</p><pre id="mfa-recovery-codes"></pre><button type="button" id="mfa-hide-codes" class="secondary">保存しました・非表示にする</button></div>
                 <form id="staff-password-form" class="stack"><h2>パスワードの変更</h2><label>現在のパスワード<input name="currentPassword" type="password" maxlength="128" autocomplete="current-password" required></label><label>新しいパスワード（15〜64文字）<input name="password" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label><button>変更して全端末からログアウト</button></form>
                 <button id="staff-logout-all" type="button" class="secondary">すべての端末からログアウト</button>
@@ -260,6 +262,7 @@
                     <output id="reset-code" aria-live="polite"></output>
                 </form>
             </details>
+            <p id="staff-media-usage" role="status"></p>
             <h2>生徒アカウントの管理</h2>
             <p>利用停止は現在のログインも無効にします。削除したアカウント・記事・コメントはゴミ箱から復元できます。</p>
             <div id="staff-students" class="cards"></div>
@@ -283,7 +286,7 @@
     <div class="wrap footer-columns">
         <div class="footer-about"><h2>STUDENT VOICE KAMATA</h2><p>学校の毎日を、みんなの言葉で。</p><p>生徒がつづるスクールブログ。<br>発見や経験を、ここからシェア。</p></div>
         <div><h2>EXPLORE</h2><a href="#board">ブログを読む</a><a href="#submit"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-4-4L5 15l-1 5ZM4 20h16"/></svg><span>記事を書く</span></a><a href="#profile">マイプロフィール</a></div>
-        <div><h2>SUPPORT</h2><a href="#account">ログイン</a><a href="#forgot">パスワードの再設定</a><a href="#staff" data-staff-link hidden><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg><span>管理画面</span></a><a href="/photo-credits.html">写真・アイコンのクレジット</a></div>
+        <div><h2>SUPPORT</h2><a href="#account">ログイン</a><a href="#forgot">パスワードの再設定</a><a href="#staff" data-staff-link hidden><svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg><span>管理画面</span></a><a href="/privacy.html">プライバシー</a><a href="/photo-credits.html">写真・アイコンのクレジット</a></div>
         <div class="footer-join"><h2>YOUR NEXT CHAPTER</h2><p>あなたの声も、この物語の一部に。</p><a class="button" href="#signup">アカウントを作成 ↗</a></div>
     </div>
     <div class="wrap footer-bottom"><p>© Student Voice Kamata · School Blog Project</p><p>Photography from Unsplash · Blog icons by cube29 &amp; Circlon Tech / Flaticon</p></div>
@@ -296,6 +299,17 @@
     <p id="success-description">書いてくれてありがとう。<br>あなたの発見が、誰かの新しい一歩になるかもしれません。</p>
     <p class="celebration-status">記事を受け付けました。先生の確認後に公開されます。</p>
     <div class="celebration-actions"><a class="button" href="#profile" id="success-profile">自分の記事を見る ↗</a><button type="button" id="success-close" class="secondary">もうひとつ書く</button></div>
+</dialog>
+<dialog id="delete-account-dialog" class="feedback-dialog" aria-labelledby="delete-account-title">
+    <h2 id="delete-account-title">アカウントの完全削除</h2>
+    <p id="delete-account-target"></p>
+    <p>プロフィール、画像、記事、コメント、リアクションを削除します。この操作は取り消せません。</p>
+    <form id="delete-account-form" class="stack">
+        <label>現在のパスワード<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>
+        <label>確認のため DELETE と入力<input name="confirmation" pattern="DELETE" required autocomplete="off"></label>
+        <button type="submit">完全に削除する</button>
+        <button id="delete-account-cancel" type="button" class="secondary">キャンセル</button>
+    </form>
 </dialog>
 <dialog id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-message">
     <span id="feedback-icon" class="feedback-icon" aria-hidden="true">✓</span>

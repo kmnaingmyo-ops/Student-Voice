@@ -1,9 +1,9 @@
 import mysql from 'mysql2/promise';
-import { readFile, writeFile, stat, realpath } from 'node:fs/promises';
-import { resolve, extname, dirname, relative, isAbsolute } from 'node:path';
+import { readFile, writeFile, stat } from 'node:fs/promises';
+import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrateDatabase } from './migrations.js';
-import { backupKey, encryptBackup, decryptBackup, snapshotDatabase, restoreRecoveryDatabase } from './recovery.js';
+import { assertExternalBackupPath, backupKey, encryptBackup, decryptBackup, snapshotDatabase, restoreRecoveryDatabase } from './recovery.js';
 
 // Load a separate private operator environment file, never the web service's secrets.
 const [action, filename] = process.argv.slice(2);
@@ -11,13 +11,9 @@ let connection;
 try {
     if (!['migrate', 'backup', 'restore-test'].includes(action)) throw Error('Use migrate, backup FILE.svbackup, or restore-test FILE.svbackup');
     if (!process.env.OPERATOR_DB_USER || process.env.OPERATOR_DB_PASSWORD === undefined) throw Error('Set separate OPERATOR_DB_USER and OPERATOR_DB_PASSWORD');
-    if (action !== 'migrate' && (!filename || extname(filename) !== '.svbackup')) throw Error('Choose a .svbackup file outside the public folder');
+    if (action !== 'migrate' && (!filename || extname(filename) !== '.svbackup')) throw Error('Choose a .svbackup file outside the repository');
     const file = filename ? resolve(filename) : '';
-    if (file) {
-        const publicDir = await realpath(fileURLToPath(new URL('./public', import.meta.url)));
-        const folder = relative(publicDir, await realpath(dirname(file)));
-        if (!isAbsolute(folder) && folder !== '..' && !folder.startsWith('..\\') && !folder.startsWith('../')) throw Error('Keep backups outside the public folder');
-    }
+    if (file) await assertExternalBackupPath(file, fileURLToPath(new URL('./', import.meta.url)));
     const key = action !== 'migrate' ? backupKey(process.env.BACKUP_KEY) : null;
     let snapshot;
     if (action === 'restore-test') {

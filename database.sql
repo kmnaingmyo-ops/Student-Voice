@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS students (
     password_hash VARCHAR(255) NOT NULL,
     password_version INT UNSIGNED NOT NULL DEFAULT 1,
     account_status ENUM('active','banned','archived') NOT NULL DEFAULT 'active',
+    must_reset_password TINYINT(1) NOT NULL DEFAULT 0,
     display_name VARCHAR(40) NOT NULL DEFAULT '',
     bio VARCHAR(300) NOT NULL DEFAULT '',
     avatar_name VARCHAR(50) DEFAULT NULL,
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS comments (
     student_id INT UNSIGNED NOT NULL,
     body VARCHAR(500) NOT NULL,
     hidden TINYINT(1) NOT NULL DEFAULT 0,
+    review_pending TINYINT(1) NOT NULL DEFAULT 0,
     archived TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX (post_id, hidden, id),
@@ -74,4 +76,11 @@ CREATE TABLE IF NOT EXISTS security_events (
  id CHAR(36) PRIMARY KEY, occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  event VARCHAR(64) NOT NULL, actor VARCHAR(64) NOT NULL, request_id CHAR(36) NOT NULL,
  status SMALLINT NOT NULL, INDEX (occurred_at)
+);
+
+CREATE TABLE IF NOT EXISTS media_quota_lock (id TINYINT UNSIGNED PRIMARY KEY);
+INSERT IGNORE INTO media_quota_lock (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS deleted_students (
+    firebase_uid_hash BINARY(32) PRIMARY KEY
 );

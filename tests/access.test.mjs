@@ -11,6 +11,8 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
     assert.match(name || '', /^sv_security_[a-z0-9_]+$/);
     process.env.SESSION_SECRET = 'isolated-integration-key-never-production'.repeat(2);
     process.env.MEDIA_STORAGE = 'database';
+    process.env.MEDIA_QUOTA_BYTES = '1024';
+    process.env.COMMENTS_PER_ACCOUNT_HOUR = '3';
     const connection = await mysql.createConnection({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root', password: process.env.DB_PASSWORD || '', multipleStatements: true });
     let server, pool, stopContainer;
     const runtimeUser = 'svt_' + randomBytes(5).toString('hex');
@@ -31,6 +33,14 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         const password = 'private teacher testing passphrase';
         const [{ insertId: id }] = await connection.execute('INSERT INTO staff (username, password_hash) VALUES (?, ?)', ['testteacher', await hashPassword(password)]);
         pool = (await import('../database.js')).db;
+        const { startStaffSession, staffSecurity, hasStaffSession } = await import('../security.js');
+        const checkedStaff = await staffSecurity(id);
+        await connection.execute('UPDATE staff SET password_hash = ? WHERE id = ?', [await hashPassword('other teacher credential'), id]);
+        const issued = { session: { regenerate: done => done(), save: done => done() } };
+        await startStaffSession(issued, { json() {} }, checkedStaff);
+        assert.equal(await hasStaffSession(issued), false, 'old verification must not pick up new credentials');
+        await connection.execute('UPDATE staff SET password_hash = ? WHERE id = ?', [checkedStaff.password_hash, id]);
+
         const denied = error => ['ER_TABLEACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR'].includes(error.code);
         await assert.rejects(pool.query('CREATE TABLE should_not_create (id INT)'), denied);
         await assert.rejects(pool.query('ALTER TABLE staff ADD COLUMN should_not_alter INT'), denied);
@@ -70,6 +80,7 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await a('/staff/suggestions')).status, 401);
         assert.equal((await a('/staff/security-events')).status, 401);
         assert.equal((await a('/login', { username: 'testteacher', password }, true)).status, 403);
+        assert.equal((await a('/staff/mfa-login', { code: '123456' })).status, 401);
         await old('/session');
         assert.equal((await a('/login', { username: 'testteacher', password })).status, 200);
         assert.equal((await old('/login', { username: 'testteacher', password })).status, 200);
@@ -180,6 +191,10 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await other('/suggestions/' + posted.id + '/comments', { body: 'Fictional comment', student_id: studentId })).status, 201);
         const [[comment]] = await connection.execute('SELECT id, student_id FROM comments WHERE post_id = ?', [posted.id]);
         assert.equal(comment.student_id, otherId);
+        assert.equal((await guest('/suggestions/' + posted.id + '/social')).body.comments.length, 0);
+        assert.equal((await other('/suggestions/' + posted.id + '/social')).body.comments[0].review_pending, 1);
+        assert.equal((await moderator('/staff/comments')).body.find(item => item.id === comment.id).review_pending, 1);
+
         assert.equal((await studentA('/staff/comments/' + comment.id, { hidden: true })).status, 401);
         assert.equal((await moderator('/staff/comments/' + comment.id, { hidden: true })).status, 200);
         assert.equal((await guest('/suggestions/' + posted.id + '/social')).body.commentCount, 0);
@@ -200,6 +215,9 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await moderator(studentPath + '/ban', {})).status, 200);
         assert.equal((await other('/session')).body.student, false);
         assert.equal((await other('/profile')).status, 401);
+        const { withStudentWrite } = await import('../student-write.js');
+        await assert.rejects(withStudentWrite({ session: { studentId: otherId, passwordVersion: 1 } }, () => assert.fail('revoked request reached write')), { status: 401 });
+
         const otherCredentials = { username: 'otherfixture', password: 'copper mountains after rainfall' };
         assert.equal((await other('/student/login', otherCredentials)).status, 403);
         assert.equal((await moderator(studentPath + '/archive', {})).status, 200);
@@ -219,6 +237,11 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await moderator(commentPath, { hidden: false })).status, 200);
         assert.equal((await guest('/suggestions/' + posted.id + '/social')).body.commentCount, 1);
 
+        for (const text of ['second from other', 'third from other', 'fourth from other']) {
+            assert.equal((await other('/suggestions/' + posted.id + '/comments', { body: text })).status, 201);
+        }
+        assert.equal((await other('/suggestions/' + posted.id + '/comments', { body: 'blocked after account budget' })).status, 429);
+        assert.equal((await studentA('/suggestions/' + posted.id + '/comments', { body: 'different account' })).status, 201);
         assert.equal((await moderator(postPath + '/archive', {})).status, 200);
         assert.equal((await guest('/suggestions/' + posted.id)).status, 404);
         assert(!(await studentA('/profile')).body.posts.some(post => post.id === posted.id));
@@ -240,6 +263,11 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#fff' } }).withMetadata({ orientation: 1 }).png().toBuffer();
         assert((await sharp(png).metadata()).exif);
         assert.equal((await studentA('/profile', avatar(png))).status, 200);
+        const quotaName = randomBytes(16).toString('hex') + '.webp';
+        await connection.execute('INSERT INTO media_files (name, data) VALUES (?, ?)', [quotaName, Buffer.alloc(1024)]);
+        assert.equal((await studentA('/profile', avatar(png))).status, 507);
+        assert.equal((await moderator('/staff/media-usage')).body.quota, 1024);
+        await connection.execute('DELETE FROM media_files WHERE name = ?', [quotaName]);
         const savedAvatar = await studentA('/profile/avatar');
         assert.equal(savedAvatar.headers.get('content-type'), 'image/webp');
         const savedMetadata = await sharp(savedAvatar.body).metadata();
@@ -258,6 +286,8 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         for (const c of [upgrade, rival]) {
             const result = await c('/student/login', { username: 'legacyfixture', password: '1234' });
             assert.equal(result.body.passwordUpgradeRequired, true);
+            const [[policy]] = await connection.execute('SELECT must_reset_password FROM students WHERE id = ?', [legacyId]);
+            assert.equal(policy.must_reset_password, 1);
             assert.equal((await c('/session')).body.student, false);
             assert.equal((await c('/profile')).status, 401);
         }
@@ -282,10 +312,11 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal((await upgrade('/student/upgrade-password', { password: '1234', password_confirmation: '1234' })).status, 400);
         assert.equal((await upgrade('/student/upgrade-password', { ...fields, password_confirmation: 'different' })).status, 400);
         assert.equal((await upgrade('/student/upgrade-password', fields)).status, 200);
-        const [[preserved]] = await connection.execute('SELECT display_name, bio, password_version FROM students WHERE id = ?', [legacyId]);
+        const [[preserved]] = await connection.execute('SELECT display_name, bio, password_version, must_reset_password FROM students WHERE id = ?', [legacyId]);
         assert.equal(preserved.display_name, 'Keep my name');
         assert.equal(preserved.bio, 'Keep my profile');
         assert.equal(preserved.password_version, 2);
+        assert.equal(preserved.must_reset_password, 0);
         const [[owned]] = await connection.execute('SELECT student_id FROM suggestions WHERE id = ?', [legacyPost]);
         assert.equal(owned.student_id, legacyId);
         assert.equal((await upgrade('/profile')).status, 200);
@@ -297,6 +328,49 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         assert.equal(relogin.body.passwordUpgradeRequired, undefined);
         assert.equal((await outsider('/profile')).status, 200);
         await connection.query('DELETE FROM security_limits');
+        const deletePassword = 'fictional deletion test credential';
+        const [{ insertId: deleteId }] = await connection.execute('INSERT INTO students (username, password_hash, avatar_name) VALUES (?, ?, ?)', ['deletefixture', await hashPassword(deletePassword), imageName]);
+        const [{ insertId: deletePost }] = await connection.execute('INSERT INTO suggestions (student_id, title, category, body) VALUES (?, ?, ?, ?)', [deleteId, 'Delete fixture', '授業', 'Fictional']);
+        await connection.execute('UPDATE students SET avatar_name = NULL WHERE id = ?', [studentId]);
+        await connection.execute('UPDATE suggestions SET image_name = NULL WHERE id = ?', [privatePost]);
+        await connection.execute('INSERT INTO comments (post_id, student_id, body) VALUES (?, ?, ?), (?, ?, ?)', [deletePost, otherId, 'comment on deleted post', posted.id, deleteId, 'deleted student comment']);
+        await connection.execute('INSERT INTO reactions (post_id, student_id, kind) VALUES (?, ?, ?), (?, ?, ?)', [deletePost, otherId, 'love', posted.id, deleteId, 'like']);
+        const deletion = client();
+        await deletion('/session');
+        await deletion('/student/login', { username: 'deletefixture', password: deletePassword });
+        assert.equal((await deletion('/student/delete-account', { password: 'wrong', confirmation: 'DELETE' })).status, 400);
+        assert.equal((await deletion('/student/delete-account', { password: deletePassword, confirmation: 'DELETE' }, true)).status, 403);
+        assert.equal((await deletion('/student/delete-account', { password: deletePassword, confirmation: 'DELETE' })).status, 200);
+        assert.equal((await deletion('/profile')).status, 401);
+        for (const [sql, values] of [
+            ['SELECT id FROM students WHERE id = ?', [deleteId]], ['SELECT id FROM suggestions WHERE id = ?', [deletePost]],
+            ['SELECT id FROM comments WHERE student_id = ? OR post_id = ?', [deleteId, deletePost]],
+            ['SELECT post_id FROM reactions WHERE student_id = ? OR post_id = ?', [deleteId, deletePost]],
+            ['SELECT name FROM media_files WHERE name = ?', [imageName]],
+        ]) {
+            const [rows] = await connection.execute(sql, values);
+            assert.equal(rows.length, 0);
+        }
+        const teacherDelete = '/staff/students/' + otherId + '/delete-permanently';
+        const proof = { password: 'a new unique teacher testing passphrase', confirmation: 'DELETE' };
+        assert.equal((await guest(teacherDelete, proof)).status, 401);
+        assert.equal((await moderator(teacherDelete, proof)).status, 409, 'active student must be archived first');
+        await moderator('/staff/students/' + otherId + '/archive', {});
+        assert.equal((await moderator(teacherDelete, proof)).status, 200);
+        const [[unrelatedPost]] = await connection.execute('SELECT student_id FROM suggestions WHERE id = ?', [posted.id]);
+        assert.equal(unrelatedPost.student_id, studentId);
+
+        await connection.query('DELETE FROM security_limits');
+        await connection.execute('UPDATE staff_security SET last_step = -1 WHERE staff_id = ?', [id]);
+        const renewal = await moderator('/staff/mfa-recovery-codes', { password: proof.password, code: totp.generate() });
+        assert.equal(renewal.status, 200);
+        assert.equal(renewal.body.recoveryCodes.length, 8);
+        const checkCodes = client();
+        await checkCodes('/session');
+        await checkCodes('/login', { username: 'testteacher', password: proof.password });
+        assert.equal((await checkCodes('/staff/mfa-login', { code: enabled.body.recoveryCodes[4] })).status, 401);
+        assert.equal((await checkCodes('/staff/mfa-login', { code: renewal.body.recoveryCodes[0] })).status, 200);
+
         const { DatabaseRateStore, DatabaseSessionStore } = await import('../security.js');
         const limitA = new DatabaseRateStore('test'), limitB = new DatabaseRateStore('test');
         limitA.init({ windowMs: 60000 }); limitB.init({ windowMs: 60000 });
@@ -306,6 +380,12 @@ test('database-backed sessions, permissions, MFA replay/recovery and revocation'
         await new Promise((resolve, reject) => storeA.set('fixture-session-id', { firebaseToken: 'not-plaintext', cookie: { expires: new Date(Date.now() + 60000) } }, error => error ? reject(error) : resolve()));
         const restored = await new Promise((resolve, reject) => storeB.get('fixture-session-id', (error, data) => error ? reject(error) : resolve(data)));
         assert.equal(restored.firebaseToken, 'not-plaintext');
+        await new Promise((resolve, reject) => storeA.destroy('fixture-session-id', error => error ? reject(error) : resolve()));
+        await new Promise((resolve, reject) => storeB.touch('fixture-session-id', restored, error => error ? reject(error) : resolve()));
+        await new Promise((resolve, reject) => storeB.set('fixture-session-id', restored, error => error ? reject(error) : resolve()));
+        const revoked = await new Promise((resolve, reject) => storeA.get('fixture-session-id', (error, data) => error ? reject(error) : resolve(data)));
+        assert.equal(revoked, null, 'stale touches and writes cannot restore a signed-out session');
+
         const [sessions] = await connection.query('SELECT id, data FROM app_sessions');
         assert(sessions.every(item => !item.data.includes('not-plaintext') && item.id.toString() !== 'fixture-session-id'));
     } finally {

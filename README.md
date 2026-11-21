@@ -88,7 +88,7 @@ Node.js serves the website. MAMP supplies MySQL. MAMP's PHP version does not aff
 - Pending and hidden articles stay private, including their individual article URLs.
 - Article author usernames stay private. Commenter usernames are displayed beside their comments. The database links each new article to the submitting student.
 
-Student usernames use 4–32 ASCII letters, digits, or underscores. New student and teacher passwords use 15–64 characters. Student usernames use 4–32 letters, digits or underscores. Existing student passwords of 4–7 characters and existing teacher passwords still work for sign-in. Password resets use the new 15–64 character rule.
+Student usernames use 4–32 ASCII letters, digits, or underscores. New student and teacher passwords use 15–64 characters. Student usernames use 4–32 letters, digits or underscores. A weak legacy student password can start the five-minute upgrade, which must finish before account access. Existing teacher credentials remain usable. Password resets use the 15–64 character rule.
 
 ## Forgotten passwords
 
@@ -122,7 +122,7 @@ Run `npm run check` for JavaScript syntax checks.
 
 If a connection error appears, check MySQL is running and that `.env` matches the database account, password, and port. Restart Node.js after editing `.env`. If port 3000 is occupied, change `PORT` to 3001 and open `http://localhost:3001`.
 
-The app binds to 127.0.0.1 for classroom use. Sessions are stored in memory for one hour and reset when Node.js restarts. SQL uses prepared statements, passwords are hashed, write actions require a session token, and private teacher routes require authorization. Submitted text is displayed using textContent. Only public files are served to browsers.
+The local start command defaults to `127.0.0.1`. The hosted Express app runs on Render with an externally reachable bind address and is served at [Student Voice Kamata](https://student-voice-kamata.pages.dev/) through Cloudflare. TiDB stores school data and one-hour encrypted application sessions. Firebase verifies email credentials. SQL uses prepared statements, passwords are hashed, write actions require the session’s CSRF token, and teacher routes check administrator access. Submitted text is displayed with `textContent`.
 
 ## Images, reactions, and comments
 
@@ -132,7 +132,7 @@ Files are stored in `uploads/`, outside the public directory. Back up this folde
 
 Open a full article to use 👍 Like, ❤️ Love, 😆 Haha, 😮 Wow, 😢 Sad, or 🤗 Care. Student login is required to react. Each student has one reaction per article and can change it or click the selected reaction again to remove it.
 
-Students can write comments of 1–500 characters. Commenter usernames are public. Comments appear immediately. Teachers can hide or restore them from the dashboard's **コメントの管理** section. Readers see the latest 50 visible comments, and teachers see the latest 100 comments for moderation. Hiding an article also hides its image and discussion.
+Students can write comments of 1–500 characters. Comments display the account alias. The first two comments from an account with no prior comments are held for teacher review by default. The author can see their pending comments. Teachers can publish, hide, or move comments to Trash from **コメントの管理**. Older comments can be loaded in the dashboard. Hiding or trashing an article removes its image and discussion from public access.
 
 ## Icon credits
 
@@ -176,3 +176,5 @@ Existing username accounts continue to sign in using the same login field. They 
 ## Additional security controls
 
 See [SECURITY.md](SECURITY.md) for teacher authenticator setup, recovery codes, session revocation, audit logging, CI checks, container guidance, and external services still needed for enterprise use. Existing teachers should enroll MFA and replace short legacy passwords themselves. No school SSO, WAF, SIEM, or endpoint agent is claimed to be active.
+
+Students can request permanent deletion from their profile by re-entering their password and typing `DELETE`. Teachers can complete a confirmed request from Trash. Deletion includes the student's articles and associated data. Read the [operator instructions](OPERATIONS.md) for Firebase and backups before deploying.

@@ -1,4 +1,4 @@
-import { registerEmailAuth, verifiedFirebaseUser, passwordProblem } from './email-auth.js';
+import { registerEmailAuth, verifiedFirebaseUser, passwordProblem, parseLegacyCutoff } from './email-auth.js';
 import express from 'express';
 import { resolve } from 'node:path';
 import session from 'express-session';
@@ -7,10 +7,12 @@ import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db } from './database.js';
 import { verifyPassword, hashPassword } from './password.js';
-import { uploadImage, saveImage, removeImage } from './media.js';
+import { uploadImage, saveImage, removeImage, mediaUsage } from './media.js';
 import { registerSocialRoutes } from './social.js';
+import { integerSetting, withStudentWrite } from './student-write.js';
+import { registerStudentDeletion } from './student-deletion.js';
 import { registerProfileRoutes } from './profile.js';
-import { initSecurity, DatabaseSessionStore, DatabaseRateStore, securityLogging, requireStaff, hasStaffSession, staffSecurity, startStaffSession, registerSecurityRoutes, fingerprint } from './security.js';
+import { initSecurity, DatabaseSessionStore, DatabaseRateStore, securityLogging, requireStaff, hasStaffSession, staffSecurity, startStaffSession, registerSecurityRoutes, fingerprint, matchesFingerprint } from './security.js';
 
 const secret = process.env.SESSION_SECRET || '';
 if (secret.length < 32 || /^(CHANGE_|replace-|example)/i.test(secret) || /^(.)\1+$/.test(secret)) {
@@ -18,12 +20,16 @@ if (secret.length < 32 || /^(CHANGE_|replace-|example)/i.test(secret) || /^(.)\1
 }
 
 export const app = express();
+const legacyCutoff = parseLegacyCutoff(process.env.LEGACY_PASSWORD_CUTOFF);
 const categories = ['授業', '学校生活', '設備', 'その他'];
 const dummyHash = await hashPassword(randomBytes(32).toString('hex'));
 await initSecurity();
 
 app.disable('x-powered-by');
-if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
+const proxyHops = process.env.TRUST_PROXY_HOPS;
+if (proxyHops !== undefined && !/^[0-5]$/.test(proxyHops)) throw new Error('TRUST_PROXY_HOPS must be an integer from 0 to 5.');
+if (process.env.NODE_ENV === 'production' && proxyHops === undefined) console.warn('TRUST_PROXY_HOPS is unset. Using the Render default of one hop.');
+app.set('trust proxy', Number(proxyHops ?? (process.env.NODE_ENV === 'production' ? 1 : 0)));
 app.use((req, res, next) => {
     res.set({
         'Content-Security-Policy': "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' blob:",
@@ -41,7 +47,7 @@ app.use(express.json({ limit: '32kb' }));
 app.use(session({
     store: new DatabaseSessionStore(),
     name: 'student_voice_sid',
-    secret,
+    secret: [secret, process.env.SESSION_SECRET_PREVIOUS].filter(Boolean),
     resave: false,
     saveUninitialized: false,
     cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'strict', maxAge: 60 * 60 * 1000 },
@@ -67,36 +73,50 @@ const loginLimit = limiter('login', 15 * 60 * 1000, 10);
 const postLimit = limiter('post', 60 * 1000, 5);
 const resetLimit = limiter('reset', 15 * 60 * 1000, 5);
 const socialLimit = limiter('social', 60 * 1000, 40);
+const studentLimit = (prefix, windowMs, limit) => limiter(prefix, windowMs, limit, { keyGenerator: req => String(req.session.studentId), passOnStoreError: false });
+const articleLimit = studentLimit('article-day', 86400000, integerSetting('ARTICLES_PER_ACCOUNT_DAY', 8, 1, 1000));
+const commentLimit = studentLimit('comment-hour', 3600000, integerSetting('COMMENTS_PER_ACCOUNT_HOUR', 12, 1, 1000));
+const uploadLimit = studentLimit('upload-day', 86400000, integerSetting('UPLOADS_PER_ACCOUNT_DAY', 12, 1, 1000));
+const budgetImage = (req, res, next) => req.file ? uploadLimit(req, res, next) : next();
 const mfaLimit = limiter('mfa-account', 15 * 60 * 1000, 5, { keyGenerator: req => String(req.session.staffChallenge?.id || 'guest') });
 app.use('/api', limiter('api', 60 * 1000, 180));
-app.use(['/api/login', '/api/student/login', '/api/student/email-login', '/api/student/request-password-reset'],
+app.use(['/api/login', '/api/student/login', '/api/student/email-login', '/api/student/request-password-reset', '/api/student/resend-verification', '/api/signup'],
     limiter('auth-account', 15 * 60 * 1000, 20, { keyGenerator: req => {
-        const identity = req.body?.email || req.body?.username;
+        const path = req.originalUrl.split('?')[0].toLowerCase().replace(/\/$/, '');
+        const identity = path === '/api/student/login'
+            ? req.body?.username || req.body?.email
+            : path === '/api/login' ? req.body?.username : req.body?.email;
         return fingerprint(typeof identity === 'string' ? identity.trim().toLowerCase().slice(0, 254) : ipKeyGenerator(req.ip));
     } }));
 registerSecurityRoutes(app, loginLimit, mfaLimit);
 
-async function requireStudent(req, res, next) {
+async function studentSessionValid(req) {
+    if (!req.session.studentId) return false;
     const [rows] = await db.execute('SELECT password_version, account_status FROM students WHERE id = ?', [req.session.studentId || 0]);
     if (!rows.length || rows[0].account_status !== 'active' || rows[0].password_version !== req.session.passwordVersion) {
         delete req.session.studentId;
-        return res.status(401).json({ error: '投稿するには生徒アカウントでログインしてください。' });
+        return false;
     }
     if (req.session.firebaseToken) {
         try {
             const user = await verifiedFirebaseUser(req.session.firebaseToken);
             if (!user || user.localId !== req.session.firebaseUid) {
                 delete req.session.studentId;
-                return res.status(401).json({ error: 'もう一度ログインしてください。' });
+                return false;
             }
         } catch (error) {
             if (error.status === 401) {
                 delete req.session.studentId;
-                return res.status(401).json({ error: 'もう一度ログインしてください。' });
+                return false;
             }
             throw error;
         }
     }
+    return true;
+}
+
+async function requireStudent(req, res, next) {
+    if (!await studentSessionValid(req)) return res.status(401).json({ error: '生徒アカウントでログインしてください。' });
     next();
 }
 
@@ -128,12 +148,17 @@ app.post('/api/student/login', loginLimit, async (req, res, next) => {
     const { username: oldUsername, email, password } = req.body || {};
     const username = oldUsername || email;
     if (!studentCredentials(username, password, 4)) return res.status(400).json({ error: '入力内容を確認してください。' });
-    const [rows] = await db.execute('SELECT id, password_hash, password_version, account_status FROM students WHERE username = ? AND firebase_uid IS NULL', [username]);
+    const [rows] = await db.execute('SELECT id, password_hash, password_version, account_status, must_reset_password FROM students WHERE username = ? AND firebase_uid IS NULL', [username]);
     if (!await verifyPassword(password, rows[0]?.password_hash || dummyHash)) {
         return res.status(401).json({ error: 'ユーザー名またはパスワードを確認してください。' });
     }
     if (rows[0].account_status !== 'active') return res.status(403).json({ error: 'このアカウントは利用できません。管理者に相談してください。' });
-    if (passwordProblem(password, username)) {
+    if (passwordProblem(password, username) || rows[0].must_reset_password) {
+        // Persist only after the old password is verified. Never overwrite a concurrent reset.
+        await db.execute('UPDATE students SET must_reset_password = 1 WHERE id = ? AND password_version = ?', [rows[0].id, rows[0].password_version]);
+        if (legacyCutoff !== null && Date.now() >= legacyCutoff && [...password].length < 15) {
+            return res.status(403).json({ error: '以前のパスワードは利用できません。パスワードの再設定画面で先生から受け取ったコードを使用してください。' });
+        }
         // This challenge proves the old password, but grants no student privileges.
         await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
         req.session.studentUpgrade = { id: rows[0].id, at: Date.now(), version: rows[0].password_version, tag: fingerprint(rows[0].password_hash) };
@@ -154,12 +179,12 @@ app.post('/api/student/upgrade-password', loginLimit, async (req, res, next) => 
     const { password, password_confirmation: confirmation } = req.body || {};
     const [rows] = await db.execute('SELECT id, username, password_hash, password_version FROM students WHERE id = ? AND firebase_uid IS NULL AND account_status = \'active\'', [challenge.id]);
     const student = rows[0];
-    if (!student || student.password_version !== challenge.version || fingerprint(student.password_hash) !== challenge.tag) return restart();
+    if (!student || student.password_version !== challenge.version || !matchesFingerprint(student.password_hash, challenge.tag)) return restart();
     const problem = passwordProblem(password, student.username);
     if (problem) return res.status(400).json({ error: problem });
     if (password !== confirmation) return res.status(400).json({ error: '確認用パスワードが一致しません。' });
     // Compare the original hash and version so a concurrent reset cannot be overwritten.
-    const [updated] = await db.execute('UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE id = ? AND firebase_uid IS NULL AND account_status = \'active\' AND password_version = ? AND password_hash = ?',
+    const [updated] = await db.execute('UPDATE students SET password_hash = ?, password_version = password_version + 1, must_reset_password = 0, reset_hash = NULL, reset_expires = NULL WHERE id = ? AND firebase_uid IS NULL AND account_status = \'active\' AND password_version = ? AND password_hash = ?',
         [await hashPassword(password), student.id, student.password_version, student.password_hash]);
     if (updated.affectedRows !== 1) return restart();
     startStudentSession(req, res, next, { id: student.id, password_version: student.password_version + 1 });
@@ -167,12 +192,12 @@ app.post('/api/student/upgrade-password', loginLimit, async (req, res, next) => 
 
 app.post('/api/student/reset', resetLimit, async (req, res) => {
     const { username, password, code } = req.body || {};
-    if (!studentCredentials(username, password) || passwordProblem(password) || typeof code !== 'string' || !/^[a-f0-9]{32}$/.test(code)) {
+    if (!studentCredentials(username, password) || passwordProblem(password, username.toLowerCase()) || typeof code !== 'string' || !/^[a-f0-9]{32}$/.test(code)) {
         return res.status(400).json({ error: 'ユーザー名・再設定コード・15〜64文字のパスワードを確認してください。' });
     }
     const digest = createHash('sha256').update(code).digest('hex');
     const [result] = await db.execute(
-        'UPDATE students SET password_hash = ?, password_version = password_version + 1, reset_hash = NULL, reset_expires = NULL WHERE username = ? AND firebase_uid IS NULL AND account_status = \'active\' AND reset_hash = ? AND reset_expires > UTC_TIMESTAMP()',
+        'UPDATE students SET password_hash = ?, password_version = password_version + 1, must_reset_password = 0, reset_hash = NULL, reset_expires = NULL WHERE username = ? AND firebase_uid IS NULL AND account_status = \'active\' AND reset_hash = ? AND reset_expires > UTC_TIMESTAMP()',
         [await hashPassword(password), username, digest]);
     if (!result.affectedRows) return res.status(400).json({ error: 'コードが無効か、有効期限が切れています。' });
     res.json({ message: 'パスワードを更新しました。新しいパスワードでログインしてください。' });
@@ -204,7 +229,7 @@ app.get('/api/session', async (req, res) => {
 
 app.get('/api/suggestions', async (req, res) => {
     const [rows] = await db.execute(
-        "SELECT id, title, category, body, created_at, cover_icon, image_name IS NOT NULL AS has_image, (SELECT COUNT(*) FROM reactions WHERE post_id = suggestions.id) AS reaction_count, (SELECT COUNT(*) FROM comments WHERE post_id = suggestions.id AND hidden = 0 AND archived = 0) AS comment_count FROM suggestions WHERE status = 'published' AND archived = 0 ORDER BY id DESC",
+        "SELECT id, title, category, body, created_at, cover_icon, image_name IS NOT NULL AS has_image, (SELECT COUNT(*) FROM reactions WHERE post_id = suggestions.id) AS reaction_count, (SELECT COUNT(*) FROM comments WHERE post_id = suggestions.id AND hidden = 0 AND archived = 0 AND review_pending = 0) AS comment_count FROM suggestions WHERE status = 'published' AND archived = 0 ORDER BY id DESC",
     );
     res.json(rows);
 });
@@ -218,7 +243,7 @@ app.get('/api/suggestions/:id', async (req, res) => {
     res.json(rows[0]);
 });
 
-app.post('/api/suggestions', requireStudent, postLimit, uploadImage, async (req, res) => {
+app.post('/api/suggestions', requireStudent, postLimit, articleLimit, uploadImage, budgetImage, async (req, res) => {
     const { title, body, category } = req.body || {};
     if (typeof title !== 'string' || typeof body !== 'string'
         || !categories.includes(category)
@@ -228,12 +253,15 @@ app.post('/api/suggestions', requireStudent, postLimit, uploadImage, async (req,
     }
     const icon = req.body.cover_icon || 'outline';
     if (!['outline', 'color'].includes(icon)) return res.status(400).json({ error: 'アイコンを選択してください。' });
-    const imageName = await saveImage(req.file);
+    let imageName;
     try {
-        await db.execute('INSERT INTO suggestions (title, category, body, student_id, cover_icon, image_name) VALUES (?, ?, ?, ?, ?, ?)',
-            [title.trim(), category, body.trim(), req.session.studentId, icon, imageName]);
+        await withStudentWrite(req, async (connection) => {
+            imageName = await saveImage(req.file, connection);
+            await connection.execute('INSERT INTO suggestions (title, category, body, student_id, cover_icon, image_name) VALUES (?, ?, ?, ?, ?, ?)',
+                [title.trim(), category, body.trim(), req.session.studentId, icon, imageName]);
+        });
     } catch (error) {
-        await removeImage(imageName);
+        if (process.env.MEDIA_STORAGE !== 'database') await removeImage(imageName);
         throw error;
     }
     res.status(201).json({ message: '記事を受け付けました。先生の確認後に公開されます。' });
@@ -245,19 +273,18 @@ app.post('/api/login', loginLimit, async (req, res, next) => {
         || typeof password !== 'string' || password.length < 4 || password.length > 128) {
         return res.status(400).json({ error: '入力内容を確認してください。' });
     }
-    const [rows] = await db.execute('SELECT id, password_hash FROM staff WHERE username = ?', [username]);
-    const valid = await verifyPassword(password, rows[0]?.password_hash || dummyHash);
+    const security = await staffSecurity(username, { byUsername: true });
+    const valid = await verifyPassword(password, security?.password_hash || dummyHash);
     if (!valid) {
         return res.status(401).json({ error: 'ユーザー名またはパスワードを確認してください。' });
     }
-    const security = await staffSecurity(rows[0].id);
     if (security.secret_cipher) {
         await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
-        req.session.staffChallenge = { id: rows[0].id, at: Date.now(), passwordTag: fingerprint(security.password_hash), epoch: Number(security.epoch), strongPassword: !passwordProblem(password) };
+        req.session.staffChallenge = { id: security.id, at: Date.now(), passwordTag: fingerprint(security.password_hash), epoch: Number(security.epoch), strongPassword: !passwordProblem(password) };
         req.session.csrf = randomBytes(32).toString('hex');
         return res.json({ mfaRequired: true, csrf: req.session.csrf });
     }
-    await startStaffSession(req, res, rows[0].id, false, !passwordProblem(password));
+    await startStaffSession(req, res, security, false, !passwordProblem(password));
 });
 
 app.get('/api/staff/suggestions', requireStaff, async (req, res) => {
@@ -285,6 +312,8 @@ app.get('/api/staff/students', requireStaff, async (req, res) => {
     const students = rows.slice(0, 50);
     res.json({ students, next: rows.length > 50 ? students.at(-1).id : null });
 });
+
+registerStudentDeletion(app, requireStudent, requireStaff, loginLimit);
 
 app.post('/api/staff/students/:id/:action', requireStaff, async (req, res) => {
     const id = Number(req.params.id);
@@ -325,13 +354,14 @@ app.post('/api/student/logout-all', requireStudent, async (req, res) => {
     res.json({ message: 'すべての端末からログアウトしました。' });
 });
 
-registerSocialRoutes(app, requireStudent, requireStaff, socialLimit);
-registerProfileRoutes(app, requireStudent, socialLimit);
+app.get('/api/staff/media-usage', requireStaff, async (_req, res) => res.json(await mediaUsage()));
+registerSocialRoutes(app, requireStudent, requireStaff, socialLimit, commentLimit, studentSessionValid);
+registerProfileRoutes(app, requireStudent, socialLimit, budgetImage);
 
 app.use((req, res) => res.status(404).json({ error: 'ページが見つかりません。' }));
 app.use((error, req, res, next) => {
     const status = error.code?.startsWith('LIMIT_') ? 400
-        : [400, 404, 413].includes(error.status) ? error.status : 503;
+        : [400, 401, 404, 409, 413, 429, 507].includes(error.status) ? error.status : 503;
     console.error('Request failed:', error.code || error.type || 'internal error');
     res.status(status).json({ error: status === 503
         ? '接続できません。データベースの設定を確認してください。'
