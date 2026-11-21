@@ -1,14 +1,23 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
+import { realpath } from 'node:fs/promises';
+import { dirname, relative, isAbsolute } from 'node:path';
 import { migrateDatabase } from './migrations.js';
 
 // Sessions and request counters are deliberately excluded: a restore signs users out.
 export const backupTables = ['staff', 'students', 'suggestions', 'reactions', 'comments',
-    'staff_security', 'security_events', 'media_files'];
+    'staff_security', 'security_events', 'media_files', 'deleted_students'];
 const order = { staff: 'id', students: 'id', suggestions: 'id', reactions: 'post_id, student_id',
-    comments: 'id', staff_security: 'staff_id', security_events: 'id', media_files: 'name' };
+    comments: 'id', staff_security: 'staff_id', security_events: 'id', media_files: 'name', deleted_students: 'firebase_uid_hash' };
 const magic = Buffer.from('SVBKP001');
 const maxSize = 100 * 1024 * 1024;
+export async function assertExternalBackupPath(file, repository) {
+    const folder = relative(await realpath(repository), await realpath(dirname(file)));
+    if (!isAbsolute(folder) && folder !== '..' && !folder.startsWith('..\\') && !folder.startsWith('../')) {
+        throw new Error('Keep encrypted backups outside the repository.');
+    }
+}
+
 export function backupKey(value) {
     if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) throw Error('Use a random 32-byte base64 BACKUP_KEY');
     const key = Buffer.from(value, 'base64');
@@ -77,8 +86,9 @@ export async function restoreRecoveryDatabase(connection, snapshot) {
     if (existing.length) throw Error('Restore target must be completely empty');
     const [[encoding]] = await connection.query('SELECT @@character_set_database AS charset');
     if (encoding.charset !== 'utf8mb4') throw Error('Create the recovery database with CHARACTER SET utf8mb4');
-    if (snapshot.version !== 1 || !snapshot.tables || Object.keys(snapshot.tables).length !== backupTables.length
-        || backupTables.some(table => !Array.isArray(snapshot.tables[table]) || snapshot.tables[table].length > 100000)) throw Error('Unsupported backup contents');
+    if (snapshot.version !== 1 || !snapshot.tables || Object.keys(snapshot.tables).some(table => !backupTables.includes(table))
+        || backupTables.some(table => !(table === 'deleted_students' && snapshot.tables[table] === undefined)
+            && (!Array.isArray(snapshot.tables[table]) || snapshot.tables[table].length > 100000))) throw Error('Unsupported backup contents');
     await connection.query("SET time_zone = '+00:00'");
     await migrateDatabase(connection);
     await connection.beginTransaction();
@@ -86,7 +96,7 @@ export async function restoreRecoveryDatabase(connection, snapshot) {
         for (const table of backupTables) {
             const [columns] = await connection.query('SHOW COLUMNS FROM `' + table + '`');
             const allowed = new Set(columns.map(column => column.Field));
-            for (const record of snapshot.tables[table]) {
+            for (const record of snapshot.tables[table] ?? []) {
                 const names = Object.keys(record);
                 if (!names.length || names.some(name => !allowed.has(name) || !/^[a-z_]+$/.test(name))) throw Error('Unknown backup column');
                 await connection.execute('INSERT INTO `' + table + '` (' + names.map(name => '`' + name + '`').join(',')

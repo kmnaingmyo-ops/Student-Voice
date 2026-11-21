@@ -1,4 +1,5 @@
-import { randomBytes } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { db } from './database.js';
 import { hashPassword } from './password.js';
 
@@ -13,13 +14,22 @@ export function normalizeEmail(value) {
     return email;
 }
 
+export function parseLegacyCutoff(value) {
+    if (!value) return null;
+    const date = Date.parse(value + 'T00:00:00.000Z');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(date) || new Date(date).toISOString().slice(0, 10) !== value) {
+        throw new Error('LEGACY_PASSWORD_CUTOFF must be a valid YYYY-MM-DD UTC date.');
+    }
+    return date;
+}
+
 export function passwordProblem(password, email = '') {
     if (typeof password !== 'string' || [...password].length < 15 || [...password].length > 64) {
         return 'パスワードは15〜64文字で設定してください。';
     }
     const plain = password.normalize('NFKC').toLowerCase();
     const common = /^(password|letmein|welcome|qwerty|administrator|iloveyou|changeme|correcthorsebatterystaple)(?:\1)*[\d\W_]*$/u;
-    const local = email.split('@')[0];
+    const local = email.split('@')[0].normalize('NFKC').toLowerCase();
     const core = value => value.replace(/[0-9\s\p{P}\p{S}]/gu, '');
     const sequential = ['0123456789','9876543210','abcdefghijklmnopqrstuvwxyz','zyxwvutsrqponmlkjihgfedcba'].some(sequence => sequence.repeat(8).includes(plain));
     if (common.test(plain) || /^(.{1,4})\1+$/u.test(plain) || sequential
@@ -68,6 +78,19 @@ export async function verifiedFirebaseUser(idToken) {
     return user;
 }
 
+const disposableDomains = ['10minutemail.com', 'dispostable.com', 'guerrillamail.com', 'mailinator.com', 'sharklasers.com', 'temp-mail.org', 'tempmail.com', 'yopmail.com'];
+export function signupDomainAllowed(email, allowed = process.env.ALLOWED_EMAIL_DOMAINS || '') {
+    const domain = email.split('@').at(-1);
+    if (disposableDomains.some(blocked => domain === blocked || domain.endsWith('.' + blocked))) return false;
+    const domains = allowed.split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
+    return !domains.length || domains.includes(domain);
+}
+
+async function waitForEmailResponse(started) {
+    // Reduce the normal fast/slow distinction without claiming equal provider timings.
+    await delay(Math.max(0, 950 + randomInt(150) - (performance.now() - started)));
+}
+
 export function registerEmailAuth(app, limit, startSession) {
     const genericEmail = 'メールを確認してください。届かない場合は迷惑メールフォルダも確認してください。';
     const handle = action => async (req, res, next) => {
@@ -82,13 +105,13 @@ export function registerEmailAuth(app, limit, startSession) {
         const password = req.body?.password;
         const problem = passwordProblem(password, email || '');
         if (!email || problem) return res.status(400).json({ error: !email ? '有効なメールアドレスを入力してください。' : problem });
+        if (!signupDomainAllowed(email)) return res.status(400).json({ error: 'このメールドメインは新規登録に利用できません。' });
+        const started = performance.now();
         let account;
         try { account = await firebaseRequest('signUp', { email, password, returnSecureToken: true }); }
-        catch (error) {
-            if (error.code !== 'EMAIL_EXISTS') throw error;
-            return res.json({ needsVerification: true, message: genericEmail + ' リンクを開いた後、ログインしてください。' });
-        }
-        await firebaseRequest('sendOobCode', { requestType: 'VERIFY_EMAIL', idToken: account.idToken });
+        catch (error) { if (error.code !== 'EMAIL_EXISTS') throw error; }
+        if (account) await firebaseRequest('sendOobCode', { requestType: 'VERIFY_EMAIL', idToken: account.idToken });
+        await waitForEmailResponse(started);
         // Never create an authenticated session before inbox ownership is verified.
         res.json({ needsVerification: true, message: genericEmail + ' リンクを開いた後、ログインしてください。' });
     }));
@@ -105,8 +128,10 @@ export function registerEmailAuth(app, limit, startSession) {
         let [rows] = await db.execute('SELECT id, password_version, account_status FROM students WHERE firebase_uid = ?', [verified.localId]);
         if (!rows.length) {
             try {
-                const [created] = await db.execute('INSERT INTO students (username, password_hash, email, firebase_uid, email_verified) VALUES (?, ?, ?, ?, 1)',
-                    ['student_' + randomBytes(8).toString('hex'), await hashPassword(randomBytes(32).toString('hex')), normalizeEmail(verified.email), verified.localId]);
+                const marker = createHash('sha256').update(verified.localId).digest();
+                const [created] = await db.execute('INSERT INTO students (username, password_hash, email, firebase_uid, email_verified) SELECT ?, ?, ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM deleted_students WHERE firebase_uid_hash = ?)',
+                    ['student_' + randomBytes(8).toString('hex'), await hashPassword(randomBytes(32).toString('hex')), normalizeEmail(verified.email), verified.localId, marker]);
+                if (!created.affectedRows) return res.status(403).json({ error: 'このアカウントは利用できません。管理者に相談してください。' });
                 rows = [{ id: created.insertId, password_version: 1, account_status: 'active' }];
             } catch (error) {
                 if (error.code !== 'ER_DUP_ENTRY') throw error;
@@ -122,19 +147,23 @@ export function registerEmailAuth(app, limit, startSession) {
         const email = normalizeEmail(req.body?.email);
         const password = req.body?.password;
         if (!email || typeof password !== 'string' || !password || password.length > 128) return res.status(400).json({ error: 'メールアドレスとパスワードを入力してください。' });
+        const started = performance.now();
         try {
             const account = await firebaseRequest('signInWithPassword', { email, password, returnSecureToken: true });
             const lookup = await firebaseRequest('lookup', { idToken: account.idToken });
             if (!lookup.users?.[0]?.emailVerified) await firebaseRequest('sendOobCode', { requestType: 'VERIFY_EMAIL', idToken: account.idToken });
-        } catch (error) { if (!['INVALID_LOGIN_CREDENTIALS','EMAIL_NOT_FOUND','INVALID_PASSWORD'].includes(error.code)) throw error; }
+        } catch (error) { if (!['INVALID_LOGIN_CREDENTIALS','EMAIL_NOT_FOUND','INVALID_PASSWORD','USER_DISABLED'].includes(error.code)) throw error; }
+        await waitForEmailResponse(started);
         res.json({ message: genericEmail });
     }));
 
     app.post('/api/student/request-password-reset', limit, handle(async (req, res) => {
         const email = normalizeEmail(req.body?.email);
         if (!email) return res.status(400).json({ error: '有効なメールアドレスを入力してください。' });
+        const started = performance.now();
         try { await firebaseRequest('sendOobCode', { requestType: 'PASSWORD_RESET', email }); }
-        catch (error) { if (error.code !== 'EMAIL_NOT_FOUND') throw error; }
+        catch (error) { if (!['EMAIL_NOT_FOUND', 'USER_DISABLED'].includes(error.code)) throw error; }
+        await waitForEmailResponse(started);
         res.json({ message: '登録済みの場合、再設定メールを送信しました。受信トレイと迷惑メールフォルダを確認してください。' });
     }));
 }

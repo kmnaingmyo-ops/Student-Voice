@@ -1,4 +1,5 @@
 import { db } from './database.js';
+import { integerSetting } from './student-write.js';
 import multer from 'multer';
 import sharp from 'sharp';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
@@ -13,7 +14,15 @@ export const uploadImage = multer({
     limits: { fileSize: 3 * 1024 * 1024, files: 1, fields: 5, fieldSize: 32 * 1024 },
 }).single('image');
 
-export async function saveImage(file) {
+export const mediaQuota = integerSetting('MEDIA_QUOTA_BYTES', 64 * 1024 * 1024, 1024, 512 * 1024 * 1024);
+
+export async function mediaUsage(connection = db) {
+    if (process.env.MEDIA_STORAGE !== 'database') return { bytes: null, quota: null };
+    const [[row]] = await connection.query('SELECT COALESCE(SUM(OCTET_LENGTH(data)), 0) AS bytes FROM media_files');
+    return { bytes: Number(row.bytes), quota: mediaQuota };
+}
+
+export async function saveImage(file, connection) {
     if (!file) return null;
     let buffer;
     try {
@@ -32,7 +41,14 @@ export async function saveImage(file) {
     }
     const name = randomBytes(16).toString('hex') + '.webp';
     if (process.env.MEDIA_STORAGE === 'database') {
-        await db.execute('INSERT INTO media_files (name, data) VALUES (?, ?)', [name, buffer]);
+        // The shared row serializes quota checks across all application instances.
+        const [[guard]] = await connection.query('SELECT id FROM media_quota_lock WHERE id = 1 FOR UPDATE');
+        if (!guard) throw new Error('Apply the media quota migration.');
+        const { bytes } = await mediaUsage(connection);
+        if (bytes + buffer.length > mediaQuota) {
+            throw Object.assign(new Error('画像の保存容量が上限に達しました。管理者に相談してください。'), { status: 507 });
+        }
+        await connection.execute('INSERT INTO media_files (name, data) VALUES (?, ?)', [name, buffer]);
     } else {
         await mkdir(imageDirectory, { recursive: true });
         await writeFile(resolve(imageDirectory, name), buffer, { flag: 'wx' });
@@ -40,9 +56,9 @@ export async function saveImage(file) {
     return name;
 }
 
-export async function removeImage(name) {
-    if (!name) return;
-    if (process.env.MEDIA_STORAGE === 'database') await db.execute('DELETE FROM media_files WHERE name = ?', [name]);
+export async function removeImage(name, connection = db) {
+    if (!/^[a-f0-9]{32}\.webp$/.test(name || '')) return;
+    if (process.env.MEDIA_STORAGE === 'database') await connection.execute('DELETE FROM media_files WHERE name = ?', [name]);
     else await unlink(resolve(imageDirectory, name));
 }
 
