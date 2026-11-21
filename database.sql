@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS students (
     email_verified TINYINT(1) NOT NULL DEFAULT 0,
     password_hash VARCHAR(255) NOT NULL,
     password_version INT UNSIGNED NOT NULL DEFAULT 1,
+    account_status ENUM('active','banned','archived') NOT NULL DEFAULT 'active',
     display_name VARCHAR(40) NOT NULL DEFAULT '',
     bio VARCHAR(300) NOT NULL DEFAULT '',
     avatar_name VARCHAR(50) DEFAULT NULL,
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS suggestions (
     cover_icon VARCHAR(20) NOT NULL DEFAULT 'outline',
     image_name VARCHAR(50) DEFAULT NULL,
     status ENUM('pending','published','hidden') NOT NULL DEFAULT 'pending',
+    archived TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX (status, id)
 ) ENGINE=InnoDB;
@@ -51,6 +53,7 @@ CREATE TABLE IF NOT EXISTS comments (
     student_id INT UNSIGNED NOT NULL,
     body VARCHAR(500) NOT NULL,
     hidden TINYINT(1) NOT NULL DEFAULT 0,
+    archived TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX (post_id, hidden, id),
     FOREIGN KEY (post_id) REFERENCES suggestions(id) ON DELETE CASCADE,

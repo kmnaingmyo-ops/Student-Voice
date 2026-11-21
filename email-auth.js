@@ -102,18 +102,19 @@ export function registerEmailAuth(app, limit, startSession) {
         const account = await firebaseRequest('signInWithPassword', { email, password, returnSecureToken: true });
         const verified = await verifiedFirebaseUser(account.idToken);
         if (!verified) return res.status(403).json({ error: '確認メールのリンクを開いてから、もう一度ログインしてください。' });
-        let [rows] = await db.execute('SELECT id, password_version FROM students WHERE firebase_uid = ?', [verified.localId]);
+        let [rows] = await db.execute('SELECT id, password_version, account_status FROM students WHERE firebase_uid = ?', [verified.localId]);
         if (!rows.length) {
             try {
                 const [created] = await db.execute('INSERT INTO students (username, password_hash, email, firebase_uid, email_verified) VALUES (?, ?, ?, ?, 1)',
                     ['student_' + randomBytes(8).toString('hex'), await hashPassword(randomBytes(32).toString('hex')), normalizeEmail(verified.email), verified.localId]);
-                rows = [{ id: created.insertId, password_version: 1 }];
+                rows = [{ id: created.insertId, password_version: 1, account_status: 'active' }];
             } catch (error) {
                 if (error.code !== 'ER_DUP_ENTRY') throw error;
-                [rows] = await db.execute('SELECT id, password_version FROM students WHERE firebase_uid = ?', [verified.localId]);
+                [rows] = await db.execute('SELECT id, password_version, account_status FROM students WHERE firebase_uid = ?', [verified.localId]);
                 if (!rows.length) return res.status(409).json({ error: 'このメールアドレスではログインできません。管理者に相談してください。' });
             }
         }
+        if (rows[0].account_status !== 'active') return res.status(403).json({ error: 'このアカウントは利用できません。管理者に相談してください。' });
         startSession(req, res, next, { ...rows[0], firebaseToken: account.idToken, firebaseUid: verified.localId });
     }));
 

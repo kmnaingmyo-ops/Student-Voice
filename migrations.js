@@ -15,8 +15,15 @@ export async function migrateDatabase(db, options = {}) {
         email: 'VARBINARY(254) DEFAULT NULL',
         firebase_uid: 'VARBINARY(128) DEFAULT NULL',
         email_verified: 'TINYINT(1) NOT NULL DEFAULT 0',
+        account_status: "ENUM('active','banned','archived') NOT NULL DEFAULT 'active'",
     })) {
         if (!columns.some(item => item.Field === column)) await db.query('ALTER TABLE students ADD COLUMN ' + column + ' ' + definition);
+    }
+    for (const table of ['suggestions', 'comments']) {
+        const [fields] = await db.query('SHOW COLUMNS FROM ' + table);
+        if (!fields.some(field => field.Field === 'archived')) {
+            await db.query('ALTER TABLE ' + table + ' ADD COLUMN archived TINYINT(1) NOT NULL DEFAULT 0');
+        }
     }
     // TiDB requires ADD COLUMN and CREATE UNIQUE INDEX to be separate statements.
     const [indexes] = await db.query('SHOW INDEX FROM students');
