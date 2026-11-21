@@ -136,8 +136,8 @@ for (const category of ['すべて', '授業', '学校生活', '設備', 'その
 function renderArticle(post, social) {
     const target = document.querySelector('#article-content');
     target.replaceChildren(metadata(post), element('h1', post.title), cover(post),
-        element('div', post.body, 'body'), element('p', 'Student Voice · 生徒のブログ', 'article-author'));
-    document.title = post.title + ' | Student Voice';
+        element('div', post.body, 'body'), element('p', 'Student Voice Kamata · 生徒のブログ', 'article-author'));
+    document.title = post.title + ' | Student Voice Kamata';
     const socialSection = element('section', '', 'article-social');
     socialSection.append(element('h2', 'リアクション'));
     const reactions = element('div', '', 'reaction-bar');
@@ -292,7 +292,7 @@ async function navigate() {
     const articleId = /^post\/([1-9]\d*)$/.exec(route)?.[1];
     const page = articleId ? 'article' : route === 'signup' ? 'account'
         : ['board', 'submit', 'staff', 'account', 'forgot', 'profile'].includes(route) ? route : 'board';
-    document.title = 'Student Voice | みんなのスクールブログ';
+    document.title = 'Student Voice Kamata | みんなのスクールブログ';
     showMessage('');
     for (const section of document.querySelectorAll('main > section')) {
         section.hidden = section.id !== page;
