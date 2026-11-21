@@ -102,3 +102,13 @@ The live Render service continues to use Render's Node runtime. These Docker con
 Unpublished and hidden article images use the same complete teacher session validation as private dashboard routes: session age, current password fingerprint, revocation epoch, and enrolled MFA state. A teacher ID left in an old session is insufficient. Guests and students receive 404 for private images; published images remain public. The issue was reproduced with a revoked fictional teacher session before the fix and covered with regression assertions afterward.
 
 The native and restricted-container integration suite also checks that students cannot publish their own pending posts, use teacher moderation routes, change another student's profile or reactions by supplying a student_id, attribute comments to another account, or view another account's private profile posts/avatar. Hidden articles and comments disappear from public responses. Upload cases cover SVG disguised as PNG, files larger than 3 MiB, successful database-stored WebP output, and metadata stripping. Rejected uploads leave no stored media. Tests use disposable data only and do not change production accounts or teacher MFA enrollment.
+
+## Security review follow-up
+
+Authenticated mutations recheck the student's status and password version while holding a database row lock. A stale request cannot write after a completed ban or account deletion. Teacher sessions are bound to the checked password/epoch. Logout deletes the session, and a stale update can only touch an existing record.
+
+New sessions and MFA data use separate keys derived by HKDF. The ciphertext includes a version and key identifier. Old records remain readable using the current or explicitly configured previous master during a planned rotation. Read the full [rotation procedure](OPERATIONS.md#rotate-the-session-secret-gradually) before changing secrets. Recovery-code renewal requires a fresh authenticator code and the current teacher password.
+
+The app limits attempts by account as well as IP. Signup and email delivery are limited and return generic account-existence messages. A minimum response window reduces typical timing differences, but Firebase variability can still be observable. Keep Firebase email enumeration protection enabled. The disposable-domain list is deliberately small and should be reviewed, and an approved school domain list is stronger if appropriate.
+
+Database media uploads reserve capacity under a shared lock. A 507 response indicates the total quota was reached. Local file storage relies on the local disk's controls. Attempts and errors are recorded without storing submitted content.
